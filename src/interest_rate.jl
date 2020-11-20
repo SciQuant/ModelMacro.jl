@@ -2,16 +2,21 @@
 # primero incluimos todos y luego definimos InterestRate (lo mismo podriamos hacer en dynamics.jl)
 # include("short_rate.jl")
 
-abstract type ShortRateParametersParser end
+abstract type ShortRateParameters end
 
-struct ShortRateModelParser{T}
-    srm::Symbol
-    params::ShortRateParametersParser
-    x::Union{ProcessParser,ProcessesParser}
-    B::ProcessParser
+struct ShortRateModel{T}
+    name::Symbol
+    params::ShortRateParameters
+
+    # ESTOY DUDANDO: necesito que x este en la tupla de dinamicas? si no es asi, porque la
+    # estoy poniendo tambien en Ps o P? Va a aparecer y no voy a poder filtrarla bien para
+    # el dynamical system. Por otro lado, necesito que `B` este en `P`? Si la tengo aca la
+    # puedo agregar yo en la tupla cuando estoy viendo los interest rates...
+    x::Union{AbstractProcess,AbstractProcesses}
+    B::AbstractProcess
 end
 
-struct AffineParametersParser <: ShortRateParametersParser
+struct AffineParameters <: ShortRateParameters
     κ::GeneralExpr
     θ::GeneralExpr
     Σ::GeneralExpr
@@ -21,7 +26,7 @@ struct AffineParametersParser <: ShortRateParametersParser
     ξ₁::GeneralExprOrNothing
 end
 
-struct QuadraticParametersParser <: ShortRateParametersParser
+struct QuadraticParameters <: ShortRateParameters
     κ::GeneralExpr
     θ::GeneralExpr
     σ::GeneralExpr
@@ -37,10 +42,10 @@ macro_params(::Val{:MultiFactorQuadratic}) = (:InterestRateModel, :ShortRateMode
 
 function parse_srm!(parser, block)
 
-    # interest rate model name, e.g. EURIBOR
+    # interest rate model name
     irname = block.args[3]
 
-    block = MacroTools.rmlines(block.args[4])
+    block = rmlines(block.args[4])
 
     # TODO: funciones en parser.jl que sean del tipo: isblock(block) y todas las que correspondan: macrocall, etc
     block.head == :block || error("expected a `:block`, got '$(string(block))' instead.")
@@ -57,13 +62,10 @@ function parse_srm!(parser, block)
     # SRM = @eval(@__MODULE__, $SRM)
 
     # parse attributes
-    attrs = Dict{GeneralExpr,GeneralExpr}()
     required_keys, optional_keys = macro_params(Val(SRM))
-    parse_attributes!(attrs, block, required_keys, optional_keys)
+    attrs = parse_attributes!(block, required_keys, optional_keys)
 
-    iparameters = parser.parameters.internal
-
-    if SRM == OneFactorAffine
+    if SRM == :OneFactorAffine
 
         x0 = attrs[:r₀] # idealmente deberiamos usar r0
         κ  = attrs[:κ]
@@ -86,7 +88,6 @@ function parse_srm!(parser, block)
     elseif SRM == :MultiFactorAffine
 
         x0 = attrs[:x₀]
-        N  = attrs[:N]
         κ  = attrs[:κ]
         θ  = attrs[:θ]
         Σ  = attrs[:Σ]
@@ -108,18 +109,18 @@ function parse_srm!(parser, block)
             :IIP => :(diffusion!($dx, $x(t), parameters($srm), t)),
             :OOP => :(diffusion($x(t), parameters($srm), t))
         )
-        xₚ = ProcessesParser(x, x0, μ=μx, σ=σx, dx=dx)
+        xₚ = AbstractProcesses(x, x0, μ=μx, σ=σx, dx=dx)
         push!(parser.dynamics.Ps, x => xₚ)
 
         B = gensym(Symbol(:B_, irname))
         B0 = :(one(eltype(state($srm))))
         μB = :($(irname).r(t) * $B(t))
-        Bₚ = ProcessParser(B, B0, μ=μB)
+        Bₚ = AbstractProcess(B, B0, μ=μB)
         push!(parser.dynamics.P, B => Bₚ)
 
-        paramsₚ = AffineParametersParser(κ, θ, Σ, α, β, ξ₀, ξ₁)
-        srmₚ = ShortRateModelParser{SRM}(srm, paramsₚ, xₚ, Bₚ) # hace srm = add_assignment!(iparameters, :mfa, :(MultiFactorAffine($x0, $κ, $θ, $Σ, $α, $β, $ξ₀, $ξ₁)), true)
-        irₚ = InterestRateParser(irname, srmₚ)
+        paramsₚ = AffineParameters(κ, θ, Σ, α, β, ξ₀, ξ₁)
+        srmₚ = ShortRateModel{SRM}(srm, paramsₚ, xₚ, Bₚ) # hace srm = add_assignment!(iparameters, :mfa, :(MultiFactorAffine($x0, $κ, $θ, $Σ, $α, $β, $ξ₀, $ξ₁)), true)
+        irₚ = InterestRate(irname, srmₚ)
         push!(parser.dynamics.IRs, irname => irₚ)
 
         # el interest rate hace
@@ -127,7 +128,7 @@ function parse_srm!(parser, block)
         #     add_assignment!(body, irname, :(InterestRate($srm, $x, $B)), false)
         # end
 
-    elseif SRM == OneFactorQuadratic
+    elseif SRM == :OneFactorQuadratic
 
         x0 = attrs[:x₀]
         κ  = attrs[:κ]
@@ -141,7 +142,7 @@ function parse_srm!(parser, block)
             iparameters, irname, :(OneFactorQuadratic($x0, $ϰ, $θ, $σ, $ξ₀, $ξ₁, $ξ₂)), true
         )
 
-    elseif SRM == MultiFactorQuadratic
+    elseif SRM == :MultiFactorQuadratic
 
         x0 = attrs[:x₀]
         κ  = attrs[:κ]
@@ -184,7 +185,7 @@ function unpack_expectation_function_shortratemodel_objects!(fskel, parser)
 
 
 
-  struct InterestRateParser
-    ir::Symbol
-    model::Union{ShortRateModelParser} # LiborMarketModelParser
+  struct InterestRate
+    name::Symbol
+    model::Union{ShortRateModel} # add LiborMarketModel
 end

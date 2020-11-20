@@ -1,9 +1,9 @@
-struct ModelParser
-    parameters::ParametersParser
-    dynamics::DynamicsParser
+struct Model
+    parameters::Parameters
+    dynamics::Dynamics
 end
 
-ModelParser() = ModelParser(ParametersParser(), DynamicsParser())
+Model() = Model(Parameters(), Dynamics())
 
 """
     @model
@@ -60,7 +60,7 @@ macro model(name, body)
     end
 
     # init an empty parser object
-    parser = ModelParser()
+    parser = Model()
 
     # initialize pre-parser objects
     # init_before_parser!(parser)
@@ -135,7 +135,7 @@ function parse_macro_model!(parser, model)
                 error("expected `@interest_rate` name as a `Symbol`, got '$(string(name))' instead.")
             end
 
-            attrs = MacroTools.rmlines(mblock.args[4])
+            attrs = rmlines(mblock.args[4])
 
             if (model = parse_attribute(:InterestRateModel, attrs)) === UMC_PARSER_ERROR
                 throw(ArgumentError("missing InterestRateModel field in `@interest_rate` '$(string(name))'."))

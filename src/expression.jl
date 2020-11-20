@@ -21,26 +21,6 @@ function add_assignment!(assignments, lhs, rhs, gensymed)
     return lhs
 end
 
-function code_block(exprs)
-    block = Expr(:block)
-    push_code!(block, exprs...)
-    return block
-end
-
-function code_tuple(exprs)
-    tup = Expr(:tuple)
-    push_code!(tuple, exprs...)
-    return tup
-end
-
-push_code!(block, a::AssignmentExpr) = push!(block.args, Expr(:(=), a.lhs, a.rhs))
-push_code!(block, g::GeneralExpr) = push!(block.args, g)
-push_code!(block, iter...) = push_code!(block, iter)
-push_code!(block, iter) = _push_code!(block, iter)
-
-function _push_code!(block, iter)
-    for item in iter
-        push_code!(block, item)
-    end
-    block
-end
+# seguramente me falte definir para a::Vector{AssignmentOrGeneralExpr} = push!.(Ref(args), a)
+Base.push!(args::Array{Any,1}, a::Vector{AssignmentExpr}) = push!.(Ref(args), a)
+Base.push!(args::Array{Any,1}, a::AssignmentExpr) = push!(args, Expr(:(=), a.lhs, a.rhs))

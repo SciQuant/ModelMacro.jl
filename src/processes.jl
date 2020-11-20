@@ -1,5 +1,5 @@
-struct ProcessesParser
-    x::Symbol # Tuple as well? or as another parameter?
+struct AbstractProcesses
+    name::Symbol # Tuple as well? or as another parameter?
     dx::Symbol
     x0::GeneralExpr
     m::GeneralExprOrNothing
@@ -8,9 +8,8 @@ struct ProcessesParser
     ρ::GeneralExprOrNothing
 end
 
-ProcessesParser(x, x0; μ=nothing, σ=nothing, m=nothing, ρ=nothing, dx=gensym(x)) =
-    ProcessesParser(x, dx, x0, m, μ, σ, ρ)
-
+AbstractProcesses(x, x0; μ=nothing, σ=nothing, m=nothing, ρ=nothing, dx=gensym(x)) =
+AbstractProcesses(x, dx, x0, m, μ, σ, ρ)
 
 function parse_processes!(parser, block)
 
@@ -24,11 +23,8 @@ function parse_processes!(parser, block)
     required_attrs_keys = (:x₀,)
     optional_attrs_keys = (:m, :μ, :σ, :ρ)
 
-    # create a dictionary to store attributes and its values
-    attrs = Dict{GeneralExpr,GeneralExpr}()
-
-    # parse attributes block
-    parse_attributes!(attrs, block.args[4], required_attrs_keys, optional_attrs_keys)
+    # parse attributes
+    attrs = parse_attributes!(block.args[4], required_attrs_keys, optional_attrs_keys)
 
     # useful handlers
     x0 = attrs[:x₀]
@@ -37,7 +33,7 @@ function parse_processes!(parser, block)
     σ = get(attrs, :σ, nothing)
     ρ = get(attrs, :ρ, nothing)
 
-    push!(parser.dynamics.Ps, name => ProcessesParser(name, x0, μ=μ, σ=σ, m=m, ρ=ρ))
+    push!(parser.dynamics.Ps, name => AbstractProcesses(name, x0, μ=μ, σ=σ, m=m, ρ=ρ))
 
     return UMC_PARSER_OK
 end

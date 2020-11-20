@@ -1,12 +1,13 @@
 
 function parse_attributes!(
-    dict::Dict{GeneralExpr,GeneralExpr},
     attrs::Expr,
     required_keys::Tuple{Vararg{GeneralExpr}},
     optional_keys::Tuple{Vararg{GeneralExpr}}
 )
-    # first, assume it is not cleaned
-    attrs = rmlines(attrs)
+    output = Dict{GeneralExpr,GeneralExpr}()
+
+    # assume it is not cleaned
+    attrs = striplines(attrs)
 
     # importan checks
     isblock(attrs)
@@ -19,16 +20,16 @@ function parse_attributes!(
             throw(ArgumentError("missing attribute '$(string(key))'."))
         end
 
-        dict[key] = value
+        output[key] = value
     end
 
     for key in optional_keys
         if (value = parse_attribute(key, attrs)) != UMC_PARSER_ERROR
-            dict[key] = value
+            output[key] = value
         end
     end
 
-    return dict
+    return output
 end
 
 function check_attributes_format(attrs::Expr)
@@ -93,7 +94,7 @@ end
 
 function parse_attribute(attr, attrs)
 
-    # first, assume that the attribute was not given
+    # assume that the attribute was not given
     val = nothing
 
     # could not use postwalk ...
@@ -106,7 +107,6 @@ function parse_attribute(attr, attrs)
         !isnothing(val) && break
     end
 
-    # returns a block if it is a block
     return isnothing(val) ? UMC_PARSER_ERROR : val
 end
 

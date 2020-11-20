@@ -26,3 +26,69 @@ end
         0
     ]
 end
+
+
+parser = @model DS begin
+
+    @interest_rate IR begin
+        InterestRateModel → ShortRateModel
+        ShortRateModel → MultiFactorAffine
+        x₀ → x0
+        ξ₀ → ξ₀
+        ξ₁ → ξ₁
+        κ → ϰ
+        θ → θ
+        Σ → Σ
+        α → α
+        β → β
+    end
+
+    @process x begin
+        x₀ → 1.
+        m → mx
+    end
+    @process y begin
+        x₀ → 1.
+        m → 2 * mx
+        ρ → ρy
+    end
+    @processes z begin
+        x₀ → [1., 2.]
+        m → [1, 2]
+        # ρ → ρ
+    end
+
+    @parameters ParamsSet begin
+
+        # x0 = @SVector [υ₀, θ₀, r₀]
+        x0 = @SVector ones(3)
+
+        ξ₀(t) = zero(t) # ξ₀ = zero
+        ξ₁(t) = @SVector [0, 0, 1]
+
+        ϰ(t) = @SMatrix([
+            μ     0 0
+            0     ν 0
+            κ_rυ -κ κ
+        ])
+        θ(t) = @SVector [ῡ, θ̄, θ̄ ]
+        Σ(t) = @SMatrix [
+            η           0    0
+            η * σ_θυ    1 σ_θr
+            η * σ_rυ σ_rθ    1
+        ]
+
+        α(t) = @SVector [0, ζ^2, α_r]
+        β(t) = @SMatrix [
+            1 0 0
+            β_θ 0 0
+            1 0 0
+        ]
+
+        a = function (x,y)
+            c = 1
+            b = 2
+            return x+y
+        end
+    end
+end

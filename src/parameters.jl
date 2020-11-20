@@ -1,13 +1,13 @@
 
-struct ParametersParser
+struct Parameters
     name::Vector{Symbol}
     names::Vector{Symbol}
     assignments::Vector{AssignmentExpr}
 end
 
-ParametersParser() = ParametersParser(Symbol[], Symbol[], AssignmentExpr[])
+Parameters() = Parameters(Symbol[], Symbol[], AssignmentExpr[])
 
-function generate_withkw_macro(p::ParametersParser)
+function generate_withkw_macro(p::Parameters)
     tuple = code_tuple(p.assignments)
     macro_expr = Expr(:macrocall, Symbol("@with_kw"), :nothing, tuple)
     macro_call = macro_call = Expr(:(=), p.name[], macro_expr)
@@ -38,10 +38,11 @@ function parse_params!(parser, block)
 
             # translate to closures when needed
             if @capture(line, f_(xs__) = body_)
-                add_assignment!(assignments, f, :(($(xs...),) -> $body), false)
+                closure = striplines(:(($(xs...),) -> $body))
+                add_assignment!(assignments, f, closure, false)
                 push!(names, f)
             else
-                add_assignment!(assignments, lhs, rhs, false)
+                add_assignment!(assignments, lhs, striplines(rhs), false)
                 push!(names, lhs)
             end
         else
