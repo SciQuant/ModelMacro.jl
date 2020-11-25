@@ -1,7 +1,7 @@
 @enum ParserReturn UMC_PARSER_OK UMC_PARSER_ERROR
 
 for head in (:block, :tuple, :macrocall)
-    fname = Symbol(:is, head)
+    fname = Symbol(:check_, head)
     qhead = quot(head)
     @eval begin
         function $fname(expr::Expr)

@@ -1,3 +1,4 @@
+
 struct Model
     parameters::Parameters
     dynamics::Dynamics
@@ -15,15 +16,13 @@ resembles writing in a piece of paper.
 
 Mas intro...
 
-* `@process`
-
-* SDEs that have correlated noises and/or share noises must be defined using `@processes`.
+* SDEs that have correlated noises and/or share noises must be defined using `@system`.
   These SDEs can have [`SacalarNoise`](@ref), [`DiagonalNoise`](@ref) or
   [`NonDiagonalNoise`](@ref).
 
         dX⃗ = μ⃗ ⋅ dt + σ⃗ ⋅ dW
 
-        @processes (S, I, R) begin
+        @system (S, I, R) begin
             m → ScalarNoise
             x₀ → @SVector ones(3)
             μ → ... # returns a vector of size = (3, )
@@ -32,7 +31,7 @@ Mas intro...
 
         dX⃗ = μ⃗ ⋅ dt + σ⃗ ⋅ dW⃗
 
-        @processes (S, I, R) begin
+        @system (S, I, R) begin
             m → DiagonalNoise
             x₀ → @SVector ones(3)
             μ → ... # returns a vector of size = (3, )
@@ -42,7 +41,7 @@ Mas intro...
 
         dX⃗ = μ⃗ ⋅ dt + σ ⋅ dW⃗(t)
 
-        @processes (S, I, R) begin
+        @system (S, I, R) begin
             m → NonDiagonalNoise(4)
             x₀ → @SVector ones(3)
             μ → ... # returns a vector of size = (3, )
@@ -101,12 +100,11 @@ end
 function parse_macro_model!(parser, model)
 
     # assume it is not cleaned
-    model_blocks = rmlines(model) # Base.rmlines! does the same trick, right?
+    model_blocks = rmlines(model)
 
     for mblock in model_blocks.args
 
-        # check
-        ismacrocall(mblock)
+        check_macrocall(mblock)
 
         # macro name
         mname = mblock.args[1]
@@ -120,13 +118,9 @@ function parse_macro_model!(parser, model)
 
             parse_timemesh!(parser, mblock)
 
-        elseif mname == Symbol("@process")
+        elseif mname == Symbol("@system")
 
-            parse_process!(parser, mblock)
-
-        elseif mname == Symbol("@processes")
-
-            parse_processes!(parser, mblock)
+            parse_system!(parser, mblock)
 
         elseif mname == Symbol("@interest_rate")
 
@@ -138,7 +132,7 @@ function parse_macro_model!(parser, model)
             attrs = rmlines(mblock.args[4])
 
             if (model = parse_attribute(:InterestRateModel, attrs)) === UMC_PARSER_ERROR
-                throw(ArgumentError("missing InterestRateModel field in `@interest_rate` '$(string(name))'."))
+                throw(ArgumentError("missing `InterestRateModel` field in `@interest_rate` '$(string(name))'."))
             end
 
             if model == :ShortRateModel
@@ -156,10 +150,6 @@ function parse_macro_model!(parser, model)
             else
                 throw(ArgumentError("the provided InterestRateModel *must* be <: `InterestRateModel`."))
             end
-
-        elseif mname == Symbol("@correlations")
-
-            parse_correlations!(parser, mblock)
 
         elseif mname == Symbol("@expectation")
 

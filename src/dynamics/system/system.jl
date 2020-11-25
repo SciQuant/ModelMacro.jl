@@ -1,4 +1,4 @@
-struct AbstractProcess
+struct SystemDynamics
     name::Symbol
     dx::Symbol
     x0::GeneralExpr
@@ -8,15 +8,15 @@ struct AbstractProcess
     ρ::GeneralExprOrNothing
 end
 
-AbstractProcess(x, x0; μ=nothing, σ=nothing, m=nothing, ρ=nothing, dx=gensym(x)) =
-    AbstractProcess(x, dx, x0, m, μ, σ, ρ)
+SystemDynamics(x, x0; μ=nothing, σ=nothing, m=nothing, ρ=nothing, dx=gensym(x)) =
+    SystemDynamics(x, dx, x0, m, μ, σ, ρ)
 
-function parse_process!(parser, block)
+function parse_system!(parser, block)
 
     name = block.args[3]
 
     if !isa(name, Symbol)
-        error("expected `@process` name as a `Symbol`, got '$(string(name))' instead.")
+        error("expected `@system` name as a `Symbol`, got '$(string(name))' instead.")
     end
 
     required_attrs_keys = (:x₀,)
@@ -31,10 +31,12 @@ function parse_process!(parser, block)
     σ = get(attrs, :σ, nothing)
     ρ = get(attrs, :ρ, nothing)
 
-    push!(parser.dynamics.P, name => AbstractProcess(name, x0, μ=μ, σ=σ, m=m, ρ=ρ))
+    push!(parser.dynamics.P, name => SystemDynamics(name, x0, μ=μ, σ=σ, m=m, ρ=ρ))
 
     return UMC_PARSER_OK
 end
+
+
 
 
 

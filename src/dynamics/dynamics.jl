@@ -1,15 +1,18 @@
 
+include("system/system.jl")
+
+include("models/models.jl")
+
 struct Dynamics
-    P::OrderedDict{Symbol,AbstractProcess}
-    Ps::OrderedDict{Symbol,AbstractProcesses}
-    IRs::OrderedDict{Symbol,InterestRate}
+    systems::OrderedDict{Symbol,SystemDynamics}
+    models::OrderedDict{Symbol,ModelDynamics}
+    # IRs::OrderedDict{Symbol,InterestRate}
 end
 
 function Dynamics()
     return Dynamics(
-        OrderedDict{Symbol,AbstractProcess}(),
-        OrderedDict{Symbol,AbstractProcesses}(),
-        OrderedDict{Symbol,InterestRate}()
+        OrderedDict{Symbol,SystemDynamics}(),
+        OrderedDict{Symbol,ModelDynamics}()
     )
 end
 
@@ -21,9 +24,10 @@ function concatenate_parameters(p::Parameters, d::Dynamics) end
 function generate_functions(d::Dynamics) end # generates dynamics functions
 
 
-function dynamics(dynamics::Dynamics)
+function convert(::Type{Expr}, dynamics::Dynamics)
 
     ds = AssignmentExpr[]
+    ds_names = Symbol[]
 
     for interest_rate in values(dynamics.IRs)
 
@@ -34,7 +38,17 @@ function dynamics(dynamics::Dynamics)
             @unpack name, params, x = model
             @unpack κ, θ, Σ, α, β, ξ₀, ξ₁ = params
 
-            add_assignment!(ds, name, :(MultiFactorAffine($(x.x0), $κ, $θ, $Σ, $α, $β, $ξ₀, $ξ₁)), false)
+            push!(ds_names,
+                add_assignment!(
+                    ds,
+                    name,
+                    :(MultiFactorAffine($(x.x0), $κ, $θ, $Σ, $α, $β, $ξ₀, $ξ₁)),
+                    false # ya esta gensymeado
+                )
+            )
+
+            # y agrego el process money market
+
 
         # elseif isa(model, LiborMarketModel)
 
@@ -50,7 +64,7 @@ function dynamics(dynamics::Dynamics)
         isnothing(m) ? nothing : push!(kwargs.args, :(m = $m))
         isnothing(ρ) ? nothing : push!(kwargs.args, :(ρ = $ρ))
 
-        add_assignment!(ds, name, :(AbstractProcess($x0; $kwargs...)), false)
+        add_assignment!(ds, name, :(AbstractProcess($x0; $kwargs...)), true)
 
     end
 
@@ -61,7 +75,7 @@ function dynamics(dynamics::Dynamics)
         isnothing(m) ? nothing : push!(kwargs.args, :(m = $m))
         isnothing(ρ) ? nothing : push!(kwargs.args, :(ρ = $ρ))
 
-        add_assignment!(ds, name, :(AbstractProcesses($x0; $kwargs...)), false)
+        add_assignment!(ds, name, :(AbstractProcesses($x0; $kwargs...)), true)
 
     end
 
@@ -70,3 +84,14 @@ function dynamics(dynamics::Dynamics)
     push!(t.args, ds)
     return t
 end
+
+
+# esta funcion la llamo dentro de parameters y recibo parameters. fuck no puedo
+function process_dimension(p)
+
+end
+
+
+
+
+

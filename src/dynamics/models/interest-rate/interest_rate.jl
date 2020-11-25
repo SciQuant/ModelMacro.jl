@@ -8,10 +8,14 @@ struct ShortRateModel{T}
     name::Symbol
     params::ShortRateParameters
 
+    # ARANCAR ACLARANDO ESTA DUDA HOY!
     # ESTOY DUDANDO: necesito que x este en la tupla de dinamicas? si no es asi, porque la
     # estoy poniendo tambien en Ps o P? Va a aparecer y no voy a poder filtrarla bien para
     # el dynamical system. Por otro lado, necesito que `B` este en `P`? Si la tengo aca la
     # puedo agregar yo en la tupla cuando estoy viendo los interest rates...
+    # YA LO SAQUE PERO CREO QUE EL TEMA VENIA POR EL LADO DE LUEGO COMO SACAR LOS INDICES
+    # SOBRE EL ARRAY DE DIMENSIONES (TUPLA DE DIMENSIONES) YA QUE SI TENGO TODO EN UN MISMO
+    # DICT DE PROCESOS, PUEDO TENER UN INDICE FACIL DE RECORRER.
     x::Union{AbstractProcess,AbstractProcesses}
     B::AbstractProcess
 end
@@ -46,12 +50,10 @@ function parse_srm!(parser, block)
     irname = block.args[3]
 
     block = rmlines(block.args[4])
-
-    # TODO: funciones en parser.jl que sean del tipo: isblock(block) y todas las que correspondan: macrocall, etc
-    block.head == :block || error("expected a `:block`, got '$(string(block))' instead.")
+    check_block(block)
 
     if (SRM = parse_attribute(:ShortRateModel, block)) === UMC_PARSER_ERROR
-        throw(ArgumentError("missing ShortRateModel field in `@interest_rate` '$(string(name))'."))
+        throw(ArgumentError("missing `ShortRateModel` field in `@interest_rate` '$(string(irname))'."))
     end
 
     if !(SRM in (:OneFactorAffine, :MultiFactorAffine, :OneFactorQuadratic, :MultiFactorQuadratic))
@@ -110,13 +112,13 @@ function parse_srm!(parser, block)
             :OOP => :(diffusion($x(t), parameters($srm), t))
         )
         xₚ = AbstractProcesses(x, x0, μ=μx, σ=σx, dx=dx)
-        push!(parser.dynamics.Ps, x => xₚ)
+        # push!(parser.dynamics.Ps, x => xₚ)
 
         B = gensym(Symbol(:B_, irname))
         B0 = :(one(eltype(state($srm))))
         μB = :($(irname).r(t) * $B(t))
         Bₚ = AbstractProcess(B, B0, μ=μB)
-        push!(parser.dynamics.P, B => Bₚ)
+        # push!(parser.dynamics.P, B => Bₚ)
 
         paramsₚ = AffineParameters(κ, θ, Σ, α, β, ξ₀, ξ₁)
         srmₚ = ShortRateModel{SRM}(srm, paramsₚ, xₚ, Bₚ) # hace srm = add_assignment!(iparameters, :mfa, :(MultiFactorAffine($x0, $κ, $θ, $Σ, $α, $β, $ξ₀, $ξ₁)), true)
@@ -184,8 +186,7 @@ function unpack_expectation_function_shortratemodel_objects!(fskel, parser)
   end
 
 
-
-  struct InterestRate
+struct InterestRate
     name::Symbol
     model::Union{ShortRateModel} # add LiborMarketModel
 end

@@ -9,9 +9,9 @@ function parse_attributes!(
     # assume it is not cleaned
     attrs = striplines(attrs)
 
-    # importan checks
-    isblock(attrs)
-    check_attributes_format(attrs) # checks `key → value` format
+    # checks
+    check_block(attrs)
+    check_attributes_format(attrs)
     check_attributes_keys(attrs, required_keys, optional_keys)
 
     for key in required_keys
@@ -40,7 +40,7 @@ function check_attributes_format(attrs::Expr)
         end
 
         if isnothing(key)
-            throw(ArgumentError("expected 'key : value' format, got '$(string(arg))' instead."))
+            throw(ArgumentError("expected 'key → value' format, got '$(string(arg))' instead."))
         end
     end
 

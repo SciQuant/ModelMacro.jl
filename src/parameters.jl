@@ -29,7 +29,7 @@ function parse_params!(parser, block)
 
     # this block contains all the parameters
     paramsblock = rmlines(block.args[4])
-    isblock(paramsblock)
+    check_block(paramsblock)
 
     for line in paramsblock.args
 
