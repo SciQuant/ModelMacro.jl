@@ -19,11 +19,11 @@ righthandside(a::AssignmentExpr) = a.rhs
 const AssignmentOrGeneralExpr = Union{AssignmentExpr,GeneralExpr}
 
 function add_assignment!(assignments, lhs, rhs, gensymed)
-    lhs = gensymed == true ? gensym(lhs) : lhs
+    lhs = gensymed ? gensym(lhs) : lhs
     push!(assignments, AssignmentExpr(lhs, rhs))
     return lhs
 end
 
-# seguramente me falte definir para a::Vector{AssignmentOrGeneralExpr} = push!.(Ref(args), a)
+Base.push!(args::Array{Any,1}, a::Vector{AssignmentOrGeneralExpr}) = push!.(Ref(args), a)
 Base.push!(args::Array{Any,1}, a::Vector{AssignmentExpr}) = push!.(Ref(args), a)
 Base.push!(args::Array{Any,1}, a::AssignmentExpr) = push!(args, Expr(:(=), a.lhs, a.rhs))

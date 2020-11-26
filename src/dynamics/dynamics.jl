@@ -23,8 +23,9 @@ function generate_functions(d::Dynamics) end # generates dynamics functions
 # expresion tupla o block
 function generate_dynamics(dynamics::Dynamics)
     ds = AssignmentExpr[]
-    push!(ds, dynamics_assignment.(values(dynamics.models))...)
-    push!(ds, dynamics_assignment.(values(dynamics.systems))...)
+    models = values(dynamics.models)
+    systems = values(dynamics.systems)
+    ds = vcat(dynamics_assignment.(models)..., dynamics_assignment.(systems)...)
     return ds
 end
 
@@ -36,7 +37,9 @@ function dynamics_assignment(model::ShortRateModelDynamics{:OneFactorAffine})
     isnothing(ξ₁) ? nothing : push!(kwargs.args, :(ξ₁ = $ξ₁))
     lhs = srm # ya esta gensymeado
     rhs = :(OneFactorAffineModelDynamics($(x.x0), $κ, $θ, $Σ, $α, $β; $kwargs...))
-    return AssignmentExpr(lhs, rhs)
+    ax = AssignmentExpr(lhs, rhs)
+    aB = dynamics_assignment(model.B)
+    return [ax, aB]
 end
 
 function dynamics_assignment(model::ShortRateModelDynamics{:MultiFactorAffine})

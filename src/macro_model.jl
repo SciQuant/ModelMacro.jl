@@ -9,10 +9,10 @@ Model() = Model(Parameters(), Dynamics())
 """
     @model
 
-Describing a problem requieres many instantiations of different objects in a correct order.
-This level of detail might become a barrier to new users. The macro `@model` defines a
-Domain Specific Language for the library, which allows scripting a problem in a way that
-resembles writing in a piece of paper.
+Describing a problem in **UniversalMonteCarlo.jl** requieres many instantiations of
+different objects in a correct order. This level of detail might become a barrier to new
+users. The macro `@model` defines a Domain Specific Language for the library, which allows
+scripting a problem in a way that resembles writing in a piece of paper.
 
 Mas intro...
 
@@ -76,12 +76,28 @@ macro model(name, body)
     dynamics = generate_dynamics(parser.dynamics)
     D = generate_dimensions(dynamics) # de aca hay que guardar el lhs de `D`
     M = generate_noise_dimensions(dynamics) # idem above
-    withkw = generate_withkw_macro(vcat(parser.parameters.assignments, dynamics, D, M))
+    params = vcat(parser.parameters.assignments, dynamics, D, M)
+    withkw = generate_withkw_macro(params)
+    call = Expr(:(=), parser.parameters.name[], withkw)
 
-    # ex = quote
-    #     # TODO: ahora esto es una llamada a una funcion que construye esta expresion
-    #     # Parameters.jl @with_kw macro
-    #     $(esc(parser.parameters.external[].macro_call))
+    du = gensym(:du)
+    u = gensym(:u)
+    p = gensym(:p)
+    t = :t
+    args = [du, u, p, t]
+
+    # ahora creo las funciones y las pueblo
+    # empecemos por la mas facil, μiip
+    f = Function{true}(gensym(:f), args, nothing, nothing, nothing)
+    unpack = generate_unpack_macro(lefthandside.(params), p)
+    push!(f.header, unpack)
+    fexpr = convert(Expr, f)
+
+    ex = quote
+
+        $(esc(call))
+
+        $fexpr
 
     #     # en realidad me va a dar en el nombre del model un dynamicalsystem
     #     $(esc(name)) = begin
@@ -95,11 +111,18 @@ macro model(name, body)
     #         # luego mas adelante tendria que construir el model, que incluye las funciones
     #         # de fairvalues y expectations
     #     end
-    # end
+    end
 
-    # return ex
+    return ex
 
-    return parser, dynamics, withkw
+    # return parser, dynamics, withkw
+end
+
+function generate_unpack_macro(paramsnames, p)
+    params = Expr(:tuple)
+    push!(params.args, paramsnames...)
+    macro_expr = Expr(:macrocall, Symbol("@unpack"), :nothing, Expr(:(=), params, p))
+    return macro_expr
 end
 
 function parse_macro_model!(parser, model)

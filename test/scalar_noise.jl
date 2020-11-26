@@ -27,10 +27,10 @@ end
     ]
 end
 
+using MacroTools
+prettify(@expand @model DS begin
 
-parser, dynamics_expr, withkw_expr = @model DS begin
-
-    @interest_rate IR begin
+    @interest_rate IR1 begin
         InterestRateModel → ShortRateModel
         ShortRateModel → MultiFactorAffine
         x₀ → 2*x0
@@ -106,4 +106,142 @@ parser, dynamics_expr, withkw_expr = @model DS begin
             return x+y
         end
     end
+end)
+
+
+
+# struct Security{T}
+#     x::T
+# end
+# (S::Security{<:SubArray{T,1}})() where T = S.x[]
+# (S::Security)() = S.x
+
+# function Security(u, t, idxs)
+#     xₜ = view(u, idxs)
+#     # x = s -> isequal(s, t) ? xₜ : throw(DomainError("error."))
+#     # x = () -> xₜ
+#     return Security(xₜ)
+# end
+
+# function test(u, p, t)
+#     X = Security(u, t, 1:2)
+#     x = Security(u, t, 3:3)
+#     Xt = X()
+#     xt = x()
+#     return Xt, xt
+# end
+
+# function test2(u, p, t)
+#     X = view(u, 1:2)
+#     x = view(u, 3:3)
+#     Xt = X
+#     xt = x
+#     return Xt, xt
+# end
+
+# struct Dimension{D} end
+# dimension(::Dimension{D}) where D = D
+# p = (Dimension{1}(), Dimension{2}(), Dimension{3}())
+
+# function test3(u, p, t)
+#     X = Security(u, t, dimension(p[1]):dimension(p[2]))
+#     x = Security(u, t, dimension(p[3]):dimension(p[3]))
+#     Xt = X()
+#     xt = x()
+#     return Xt, xt
+# end
+
+# function test4(u, p, t)
+#     X = view(u, dimension(p[1]):dimension(p[2]))
+#     x = view(u, dimension(p[3]):dimension(p[3]))
+#     Xt = X
+#     xt = x
+#     return Xt, xt
+# end
+
+# p2 = (1, 2, 3)
+# function test4(u, p, t)
+#     X = view(u, p[1]:p[2])
+#     x = view(u, p[3]:p[3])
+#     Xt = X
+#     xt = x
+#     return Xt, xt
+# end
+
+
+# tengo que agregar el dx al Security{D,M}(du, u, ) y testear que todo siga igual de bien
+struct Security{D,M,T}
+    x::T
 end
+# dimension(::Security{D}) where {D} = D
+# noise_dimension(::Security{D,M}) where {D,M} = M
+# puedo usar el closure en funcion de (t) y los siguientes metodos funcionarian con (t::Real)
+(S::Security{1})() = S.x[]
+(S::Security{D})() where {D} = S.x
+# (S::Security{D})(i) where {D} = S.x[i] # este no es necesario, se llama con [] y ya
+# (S::Security{D})(i, t) where {D} = S.x[i]
+
+function Security{D,M}(u, t, idxs) where {D,M}
+    xₜ = view(u, idxs)
+    # x = s -> isequal(s, t) ? xₜ : throw(DomainError("error."))
+    return Security{D,M,typeof(xₜ)}(xₜ)
+end
+
+u = rand(3)
+p = nothing
+t = 0.1
+
+function test1(u, p, t)
+    X = Security(u, t, 2, 1, 1:2)
+    x = Security(u, t, 2, 1, 3:3)
+    Xt = X()
+    xt = x()
+    return Xt, xt
+end
+@btime test1($u, $p, $t)
+# 3.666 ns (0 allocations: 0 bytes)
+
+function test2(u, p, t)
+    X = view(u, 1:2)
+    x = view(u, 3:3)
+    Xt = X
+    xt = x[]
+    return Xt, xt
+end
+@btime test2($u, $p, $t)
+# 3.666 ns (0 allocations: 0 bytes)
+
+struct Dimension{D} end
+dimension(::Dimension{D}) where D = D
+p = (Dimension{1}(), Dimension{2}(), Dimension{3}())
+
+function test3(u, p, t)
+    X = Security{dimension(p[2]),dimension(p[1])}(u, t, dimension(p[1]):dimension(p[2]))
+    x = Security{dimension(p[1]),dimension(p[1])}(u, t, dimension(p[3]):dimension(p[3]))
+    Xt = X()
+    xt = x()
+    return Xt, xt
+end
+@btime test3($u, $p, $t)
+# 3.667 ns (0 allocations: 0 bytes)
+
+function test4(u, p, t)
+    X = view(u, dimension(p[1]):dimension(p[2]))
+    x = view(u, dimension(p[3]):dimension(p[3]))
+    Xt = X
+    xt = x[]
+    return Xt, xt
+end
+@btime test4($u, $p, $t)
+# 3.666 ns (0 allocations: 0 bytes)
+
+p = (1, 2, 3)
+function test5(u, p, t)
+    X = view(u, p[1]:p[2])
+    x = view(u, p[3]:p[3])
+    Xt = X
+    xt = x
+    return Xt, xt
+end
+@btime test5($u, $p, $t)
+# 6.417 ns (0 allocations: 0 bytes)

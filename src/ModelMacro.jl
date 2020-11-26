@@ -1,6 +1,6 @@
 module ModelMacro
 
-using UnPack: @unpack
+using Parameters: @unpack, @with_kw
 
 using Base.Meta: quot, isexpr
 using MacroTools: rmlines, striplines, @match, @capture
@@ -16,6 +16,7 @@ include("utils.jl")
 include("expression.jl")
 include("attributes.jl")
 include("parameters.jl")
+include("function.jl")
 include("dynamics/dynamics.jl")
 include("macro_model.jl")
 
