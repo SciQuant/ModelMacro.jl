@@ -7,11 +7,14 @@ end
 
 Parameters() = Parameters(Symbol[], Symbol[], AssignmentExpr[])
 
-function generate_withkw_macro(p::Parameters)
-    tuple = code_tuple(p.assignments)
-    macro_expr = Expr(:macrocall, Symbol("@with_kw"), :nothing, tuple)
-    macro_call = macro_call = Expr(:(=), p.name[], macro_expr)
-    return macro_call
+generate_withkw_macro(p::Parameters) = generate_withkw_macro(p.assignments)
+
+function generate_withkw_macro(a::Vector{AssignmentExpr})
+    t = Expr(:tuple)
+    push!(t.args, a)
+    macro_expr = Expr(:macrocall, Symbol("@with_kw"), :nothing, t)
+    # macro_call = macro_call = Expr(:(=), p.name[], macro_expr)
+    return macro_expr
 end
 
 function parse_params!(parser, block)

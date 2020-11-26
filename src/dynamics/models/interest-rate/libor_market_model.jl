@@ -1,0 +1,2 @@
+
+struct LiborMarketModelDynaics <: InterestRateModelDynamics end

@@ -48,8 +48,6 @@ Mas intro...
             σ → ... # returns a matrix of size = (3, 4)
             ρ → ... # constant matrix of size = (4, 4)
         end
-
-
 """
 macro model(name, body)
 
@@ -73,6 +71,13 @@ macro model(name, body)
     # this function might be moved outside as generate_model(model_parser)
     # model = build_model(parser)
 
+    # estas funciones van dentro de init_after_parser y en particular, son
+    # generate_withkw_macro (algo asi, aunque ese nombre ya existe)
+    dynamics = generate_dynamics(parser.dynamics)
+    D = generate_dimensions(dynamics) # de aca hay que guardar el lhs de `D`
+    M = generate_noise_dimensions(dynamics) # idem above
+    withkw = generate_withkw_macro(vcat(parser.parameters.assignments, dynamics, D, M))
+
     # ex = quote
     #     # TODO: ahora esto es una llamada a una funcion que construye esta expresion
     #     # Parameters.jl @with_kw macro
@@ -94,7 +99,7 @@ macro model(name, body)
 
     # return ex
 
-    return parser
+    return parser, dynamics, withkw
 end
 
 function parse_macro_model!(parser, model)

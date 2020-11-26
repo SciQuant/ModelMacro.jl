@@ -28,12 +28,12 @@ end
 end
 
 
-parser = @model DS begin
+parser, dynamics_expr, withkw_expr = @model DS begin
 
     @interest_rate IR begin
         InterestRateModel → ShortRateModel
         ShortRateModel → MultiFactorAffine
-        x₀ → x0
+        x₀ → 2*x0
         ξ₀ → ξ₀
         ξ₁ → ξ₁
         κ → ϰ
@@ -43,19 +43,34 @@ parser = @model DS begin
         β → β
     end
 
-    @process x begin
-        x₀ → 1.
-        m → mx
+    @interest_rate IR2 begin
+        InterestRateModel → ShortRateModel
+        ShortRateModel → OneFactorAffine
+        r₀ → r0
+        ξ₀ → 2ξ₀
+        # ξ₁ → ξ₁
+        κ → ϰ
+        θ → θ
+        Σ → Σ
+        α → α
+        β → β
     end
-    @process y begin
+
+
+    @system x begin
         x₀ → 1.
-        m → 2 * mx
+        m → NonDiagonalNoise(2)
+    end
+
+    @system y begin
+        x₀ → 1.
+        m → NonDiagonalNoise(4)
         ρ → ρy
     end
-    @processes z begin
+
+    @system z begin
         x₀ → [1., 2.]
-        m → [1, 2]
-        # ρ → ρ
+        m → ScalarNoise()
     end
 
     @parameters ParamsSet begin

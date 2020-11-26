@@ -1,3 +1,4 @@
+
 struct SystemDynamics
     name::Symbol
     dx::Symbol
@@ -31,7 +32,7 @@ function parse_system!(parser, block)
     σ = get(attrs, :σ, nothing)
     ρ = get(attrs, :ρ, nothing)
 
-    push!(parser.dynamics.P, name => SystemDynamics(name, x0, μ=μ, σ=σ, m=m, ρ=ρ))
+    push!(parser.dynamics.systems, name => SystemDynamics(name, x0, μ=μ, σ=σ, m=m, ρ=ρ))
 
     return UMC_PARSER_OK
 end

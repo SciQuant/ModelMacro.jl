@@ -13,6 +13,9 @@ struct AssignmentExpr
     rhs::GeneralExpr
 end
 
+lefthandside(a::AssignmentExpr) = a.lhs
+righthandside(a::AssignmentExpr) = a.rhs
+
 const AssignmentOrGeneralExpr = Union{AssignmentExpr,GeneralExpr}
 
 function add_assignment!(assignments, lhs, rhs, gensymed)

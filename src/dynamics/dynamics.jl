@@ -6,7 +6,6 @@ include("models/models.jl")
 struct Dynamics
     systems::OrderedDict{Symbol,SystemDynamics}
     models::OrderedDict{Symbol,ModelDynamics}
-    # IRs::OrderedDict{Symbol,InterestRate}
 end
 
 function Dynamics()
@@ -16,82 +15,66 @@ function Dynamics()
     )
 end
 
-# se construyen con una funcion
-# D_expr::Expr # inside parameters?
-# M_expr::Expr # inside parameters?
-function generate_dimensions(d::Dynamics) end # generates tuples withs Dimensions
-function concatenate_parameters(p::Parameters, d::Dynamics) end
+
 function generate_functions(d::Dynamics) end # generates dynamics functions
 
 
-function convert(::Type{Expr}, dynamics::Dynamics)
-
+# genero un array de AssignmentExpr de dynamicas, el resultado de esta funcion se pasa a una
+# expresion tupla o block
+function generate_dynamics(dynamics::Dynamics)
     ds = AssignmentExpr[]
-    ds_names = Symbol[]
+    push!(ds, dynamics_assignment.(values(dynamics.models))...)
+    push!(ds, dynamics_assignment.(values(dynamics.systems))...)
+    return ds
+end
 
-    for interest_rate in values(dynamics.IRs)
+function dynamics_assignment(model::ShortRateModelDynamics{:OneFactorAffine})
+    @unpack srm, params, x = model
+    @unpack κ, θ, Σ, α, β, ξ₀, ξ₁ = params
+    kwargs = Expr(:tuple)
+    isnothing(ξ₀) ? nothing : push!(kwargs.args, :(ξ₀ = $ξ₀))
+    isnothing(ξ₁) ? nothing : push!(kwargs.args, :(ξ₁ = $ξ₁))
+    lhs = srm # ya esta gensymeado
+    rhs = :(OneFactorAffineModelDynamics($(x.x0), $κ, $θ, $Σ, $α, $β; $kwargs...))
+    return AssignmentExpr(lhs, rhs)
+end
 
-        model = interest_rate.model
+function dynamics_assignment(model::ShortRateModelDynamics{:MultiFactorAffine})
+    @unpack srm, params, x = model
+    @unpack κ, θ, Σ, α, β, ξ₀, ξ₁ = params
+    lhs = srm # ya esta gensymeado
+    rhs = :(MultiFactorAffineModelDynamics($(x.x0), $κ, $θ, $Σ, $α, $β, $ξ₀, $ξ₁))
+    return AssignmentExpr(lhs, rhs)
+end
 
-        if isa(model, ShortRateModel)
+function dynamics_assignment(system::SystemDynamics)
+    @unpack name, x0, m, ρ = system
+    kwargs = Expr(:tuple)
+    isnothing(m) ? nothing : push!(kwargs.args, :(m = $m))
+    isnothing(ρ) ? nothing : push!(kwargs.args, :(ρ = $ρ))
+    lhs = gensym(name)
+    rhs = :(SystemDynamics($x0; $kwargs...))
+    return AssignmentExpr(lhs, rhs)
+end
 
-            @unpack name, params, x = model
-            @unpack κ, θ, Σ, α, β, ξ₀, ξ₁ = params
-
-            push!(ds_names,
-                add_assignment!(
-                    ds,
-                    name,
-                    :(MultiFactorAffine($(x.x0), $κ, $θ, $Σ, $α, $β, $ξ₀, $ξ₁)),
-                    false # ya esta gensymeado
-                )
-            )
-
-            # y agrego el process money market
-
-
-        # elseif isa(model, LiborMarketModel)
-
-        end
-
-
-    end
-
-    for process in values(dynamics.P)
-        @unpack name, x0, m, ρ = process
-
-        kwargs = Expr(:tuple)
-        isnothing(m) ? nothing : push!(kwargs.args, :(m = $m))
-        isnothing(ρ) ? nothing : push!(kwargs.args, :(ρ = $ρ))
-
-        add_assignment!(ds, name, :(AbstractProcess($x0; $kwargs...)), true)
-
-    end
-
-    for processes in values(dynamics.Ps)
-        @unpack name, x0, m, ρ = processes
-
-        kwargs = Expr(:tuple)
-        isnothing(m) ? nothing : push!(kwargs.args, :(m = $m))
-        isnothing(ρ) ? nothing : push!(kwargs.args, :(ρ = $ρ))
-
-        add_assignment!(ds, name, :(AbstractProcesses($x0; $kwargs...)), true)
-
-    end
-
-
+function generate_dimensions(dynamics::Vector{AssignmentExpr})
+    names = lefthandside.(dynamics)
     t = Expr(:tuple)
-    push!(t.args, ds)
-    return t
+    for name in names
+        push!(t.args, Expr(:call, Expr(:curly, :Dimension, Expr(:call, :dimension, name))))
+    end
+    lhs = gensym(:D)
+    rhs = Expr(:call, :cumsum, t)
+    return AssignmentExpr(lhs, rhs)
 end
 
-
-# esta funcion la llamo dentro de parameters y recibo parameters. fuck no puedo
-function process_dimension(p)
-
+function generate_noise_dimensions(dynamics::Vector{AssignmentExpr})
+    names = lefthandside.(dynamics)
+    t = Expr(:tuple)
+    for name in names
+        push!(t.args, Expr(:call, Expr(:curly, :Dimension, Expr(:call, :noise_dimension, name))))
+    end
+    lhs = gensym(:M)
+    rhs = Expr(:call, :cumsum, t)
+    return AssignmentExpr(lhs, rhs)
 end
-
-
-
-
-
