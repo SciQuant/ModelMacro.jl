@@ -1,16 +1,15 @@
 
 struct Function{IIP}
     name::Symbol
-    args::Vector{Symbol}
-    header::Vector{AssignmentOrGeneralExpr}
-    body::Vector{AssignmentOrGeneralExpr}
-    output::Vector{AssignmentOrGeneralExpr}
+    args::Expr
+    header::Expr
+    body::Expr
+    output::Expr
 
-    function Function{IIP}(name, args, header, body, output) where {IIP}
-        args = isnothing(args) ? Symbol[] : args
-        header = isnothing(header) ? AssignmentOrGeneralExpr[] : header
-        body = isnothing(body) ? AssignmentOrGeneralExpr[] : body
-        output = isnothing(output) ? AssignmentOrGeneralExpr[] : output
+    function Function{IIP}(
+        name;
+        args=Expr(:tuple), header=Expr(:block), body=Expr(:block), output=Expr(:block)
+    ) where {IIP}
         return new{IIP}(name, args, header, body, output)
     end
 end
@@ -35,16 +34,8 @@ name(f::Function) = f.name
 # getfuncname(parser, name) = getname(getfunction(parser, name))
 
 function Base.convert(::Type{Expr}, f::Function{true})
-    @unpack name, args = f
-    header = Expr(:block)
-    push!(header.args, f.header...)
-    body = Expr(:block)
-    push!(body.args, f.body...)
-    output = Expr(:block)
-    push!(output.args, f.output...)
-    # header, body, output = build_function_blocks(f)
-
-    f = Expr(:call, name, args...)
+    @unpack name, args, header, body, output = f
+    f = Expr(:call, name, args)
     ex = :(
         $f = begin
             @inbounds begin
@@ -81,11 +72,4 @@ function Base.convert(::Type{Expr}, f::Function{false})
     )
 
     return esc(ex)
-end
-
-function build_function_blocks(fparser::Function)
-    header_block = code_block(fparser.header)
-    body_block = code_block(fparser.body)
-    output_block = code_block(fparser.output)
-    return header_block, body_block, output_block
 end

@@ -170,8 +170,10 @@ end)
 
 
 # tengo que agregar el dx al Security{D,M}(du, u, ) y testear que todo siga igual de bien
-struct Security{D,M,T}
-    x::T
+# o sea, agregar dμ y dσ, porque pueden ser diferentes views
+struct Security{D,M,DN,T,S}
+    dx::T
+    x::S
 end
 # dimension(::Security{D}) where {D} = D
 # noise_dimension(::Security{D,M}) where {D,M} = M
@@ -187,19 +189,57 @@ function Security{D,M}(u, t, idxs) where {D,M}
     return Security{D,M,typeof(xₜ)}(xₜ)
 end
 
+# al drift siempre le mando DN = true
+function Security{D,M,true}(du, u, t, idxs) where {D,M}
+    dxₜ = view(du, idxs)
+    xₜ = view(u, idxs)
+    # x = s -> isequal(s, t) ? xₜ : throw(DomainError("error."))
+    return Security{D,M,true,typeof(dxₜ),typeof(xₜ)}(dxₜ, xₜ)
+end
+
+# esta se usa en el caso del non diagonal noise para σ
+function Security{D,M,false}(du, u, t, d, m) where {D,M}
+    dxₜ = view(du, d, m)
+    xₜ = view(u, d)
+    # x = s -> isequal(s, t) ? xₜ : throw(DomainError("error."))
+    return Security{D,M,false,typeof(dxₜ),typeof(xₜ)}(dxₜ, xₜ)
+end
+
+du = rand(3)
 u = rand(3)
 p = nothing
 t = 0.1
 
-function test1(u, p, t)
-    X = Security(u, t, 2, 1, 1:2)
-    x = Security(u, t, 2, 1, 3:3)
+function test1(du, u, p, t)
+    X = Security{2,1,true}(du, u, t, 1:2)
+    x = Security{1,1,true}(du, u, t, 3:3)
     Xt = X()
     xt = x()
     return Xt, xt
 end
-@btime test1($u, $p, $t)
+@btime test1($du, $u, $p, $t)
 # 3.666 ns (0 allocations: 0 bytes)
+
+du = rand(3, 5)
+function test(du, u, p, t)
+    X = Security{2,3,false}(du, u, t, 1:2, 1:3)
+    x = Security{1,2,false}(du, u, t, 3:3, 4:5)
+    Xt = X()
+    xt = x()
+    return Xt, xt
+end
+@btime test($du, $u, $p, $t)
+
+function test0(du, u, p, t)
+    X = view(u, 1:2)
+    x = view(u, 3:3)
+    dX = view(du, 1:2, 1:3)
+    dx = view(du, 3:3, 4:5)
+    Xt = X
+    xt = x[]
+    return Xt, xt
+end
+@btime test0($du, $u, $p, $t)
 
 function test2(u, p, t)
     X = view(u, 1:2)
@@ -245,3 +285,14 @@ function test5(u, p, t)
 end
 @btime test5($u, $p, $t)
 # 6.417 ns (0 allocations: 0 bytes)
+
+p = [1, 2, 3]
+function test6(u, p, t)
+    X = view(u, p[1]:p[2])
+    x = view(u, p[3]:p[3])
+    Xt = X
+    xt = x
+    return Xt, xt
+end
+@btime test6($u, $p, $t)
+# 7.312 ns (0 allocations: 0 bytes)

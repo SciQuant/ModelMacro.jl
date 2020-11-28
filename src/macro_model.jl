@@ -74,7 +74,7 @@ macro model(name, body)
     # estas funciones van dentro de init_after_parser y en particular, son
     # generate_withkw_macro (algo asi, aunque ese nombre ya existe)
     dynamics = generate_dynamics(parser.dynamics)
-    D = generate_dimensions(dynamics) # de aca hay que guardar el lhs de `D`
+    D = generate_dimensions(dynamics) # de aca hay que guardar el lhs de `D`, el name
     M = generate_noise_dimensions(dynamics) # idem above
     params = vcat(parser.parameters.assignments, dynamics, D, M)
     withkw = generate_withkw_macro(params)
@@ -84,14 +84,26 @@ macro model(name, body)
     u = gensym(:u)
     p = gensym(:p)
     t = :t
-    args = [du, u, p, t]
 
     # ahora creo las funciones y las pueblo
     # empecemos por la mas facil, μiip
-    f = Function{true}(gensym(:f), args, nothing, nothing, nothing)
+    f = Function{true}(gensym(:f), args=Expr(:tuple, du, u, p, t))
     unpack = generate_unpack_macro(lefthandside.(params), p)
-    push!(f.header, unpack)
+    securities = generate_securities(parser.dynamics, du, u, lefthandside(D))
+
+    @show securities
+
+    push!(f.header.args, convert(Expr, unpack))
+    push!(f.header.args, convert.(Expr, securities)...)
+
+    @show f.header
+
+    # vcat(f.header, securities)
+
+
+
     fexpr = convert(Expr, f)
+
 
     ex = quote
 
@@ -123,6 +135,32 @@ function generate_unpack_macro(paramsnames, p)
     push!(params.args, paramsnames...)
     macro_expr = Expr(:macrocall, Symbol("@unpack"), :nothing, Expr(:(=), params, p))
     return macro_expr
+end
+
+function generate_securities(dynamics::Dynamics, du, u, D)
+    models = values(dynamics.models)
+    systems = values(dynamics.systems)
+    ss = vcat(security_assignment.(models, Ref(du), Ref(u), Ref(D))..., security_assignment.(systems, Ref(du), Ref(u), Ref(D))...)
+    return ss
+end
+
+# estamos pensando en algo que es para f y ademas IIP, luego implemetar dispatch
+function security_assignment(model::ShortRateModelDynamics, du, u, D)
+    @unpack x, B = model
+    ax = security_assignment(x, du, u, D)
+    aB = security_assignment(B, du, u, D)
+    return [ax, aB]
+end
+
+function security_assignment(system::SystemDynamics, du, u, D)
+    @unpack dname, sname, idx = system
+    lhs = sname
+    idx_D_from = idx - 1
+    idx_D_to = idx
+    D_from = iszero(idx_D_from) ? 1 : :(dimension($D[$idx_D_from]) + 1)
+    D_to = :(dimension($D[$idx_D_to]))
+    rhs = :(Security{dimension($dname),noise_dimension($dname),true}($du, $u, t, $D_from:$D_to))
+    return AssignmentExpr(lhs, rhs)
 end
 
 function parse_macro_model!(parser, model)
@@ -197,3 +235,7 @@ function parse_macro_model!(parser, model)
 
     return UMC_PARSER_OK
 end
+
+# f.header = Union{Expr, Number, Symbol, ModelMacro.AssignmentExpr}[
+#     :(@unpack (x0, ξ₀, ξ₁, ϰ, θ, Σ, α, β, a, var"##dynamicsIR1#643", var"##dynamics##B_IR1#645#646", var"##dynamicsIR2#647", var"##dynamics##B_IR2#649#650", var"##x#651", var"##y#652", var"##z#653", var"##D#654", var"##M#655") = var"##p#658"),
+#     ModelMacro.AssignmentExpr(Symbol("##x_IR1#644"), :(Security{dimension(var"##dynamicsIR1#643"), noise_dimension(var"##dynamicsIR1#643"), true}(var"##du#656", var"##u#657", t, 1:dimension(var"##D#654"[1])))), ModelMacro.AssignmentExpr(Symbol("##B_IR1#645"), :(Security{dimension(var"##dynamics##B_IR1#645#646"), noise_dimension(var"##dynamics##B_IR1#645#646"), true}(var"##du#656", var"##u#657", t, dimension(var"##D#654"[1]) + 1:dimension(var"##D#654"[2])))), ModelMacro.AssignmentExpr(Symbol("##x_IR2#648"), :(Security{dimension(var"##dynamicsIR2#647"), noise_dimension(var"##dynamicsIR2#647"), true}(var"##du#656", var"##u#657", t, dimension(var"##D#654"[2]) + 1:dimension(var"##D#654"[3])))), ModelMacro.AssignmentExpr(Symbol("##B_IR2#649"), :(Security{dimension(var"##dynamics##B_IR2#649#650"), noise_dimension(var"##dynamics##B_IR2#649#650"), true}(var"##du#656", var"##u#657", t, dimension(var"##D#654"[3]) + 1:dimension(var"##D#654"[4])))), ModelMacro.AssignmentExpr(:x, :(Security{dimension(var"##x#651"), noise_dimension(var"##x#651"), true}(var"##du#656", var"##u#657", t, dimension(var"##D#654"[4]) + 1:dimension(var"##D#654"[5])))), ModelMacro.AssignmentExpr(:y, :(Security{dimension(var"##y#652"), noise_dimension(var"##y#652"), true}(var"##du#656", var"##u#657", t, dimension(var"##D#654"[5]) + 1:dimension(var"##D#654"[6])))), ModelMacro.AssignmentExpr(:z, :(Security{dimension(var"##z#653"), noise_dimension(var"##z#653"), true}(var"##du#656", var"##u#657", t, dimension(var"##D#654"[6]) + 1:dimension(var"##D#654"[7]))))]

@@ -22,17 +22,8 @@ end
 
 struct ShortRateModelDynamics{T} <: InterestRateModelDynamics
     irm::Symbol
-    srm::Symbol
+    dname::Symbol # dynamics name
     params::ShortRateParameters
-
-    # ARANCAR ACLARANDO ESTA DUDA HOY!
-    # ESTOY DUDANDO: necesito que x este en la tupla de dinamicas? si no es asi, porque la
-    # estoy poniendo tambien en Ps o P? Va a aparecer y no voy a poder filtrarla bien para
-    # el dynamical system. Por otro lado, necesito que `B` este en `P`? Si la tengo aca la
-    # puedo agregar yo en la tupla cuando estoy viendo los interest rates...
-    # YA LO SAQUE PERO CREO QUE EL TEMA VENIA POR EL LADO DE LUEGO COMO SACAR LOS INDICES
-    # SOBRE EL ARRAY DE DIMENSIONES (TUPLA DE DIMENSIONES) YA QUE SI TENGO TODO EN UN MISMO
-    # DICT DE PROCESOS, PUEDO TENER UN INDICE FACIL DE RECORRER.
     x::SystemDynamics
     B::SystemDynamics
 end
@@ -80,34 +71,32 @@ function parse_srm!(parser, block)
         kwargs = Expr(:tuple)
         isnothing(ξ₀) ? nothing : push!(kwargs.args, :(ξ₀ = $ξ₀))
         isnothing(ξ₁) ? nothing : push!(kwargs.args, :(ξ₁ = $ξ₁))
-
-        # definimos un name para el short rate model en base al nombre del interest rate
-        srm = gensym(Symbol(:srm, irm))
+        dname = gensym(Symbol(:dynamics, irm))
 
         x = gensym(Symbol(:x_, irm))
-        dx = gensym(Symbol(:d, x))
         μx = Dict{Symbol,GeneralExpr}(
-            :IIP => :(drift!($dx, $x(t), parameters($srm), t)),
-            :OOP => :(drift($x(t), parameters($srm), t))
+            :IIP => :(drift!($(x).dx, $x(t), parameters($dname), t)),
+            :OOP => :(drift($x(t), parameters($dname), t))
         )
         σx = Dict{Symbol,GeneralExpr}(
-            :IIP => :(diffusion!($dx, $x(t), parameters($srm), t)),
-            :OOP => :(diffusion($x(t), parameters($srm), t))
+            :IIP => :(diffusion!($(x).dx, $x(t), parameters($dname), t)),
+            :OOP => :(diffusion($x(t), parameters($dname), t))
         )
-        xₚ = SystemDynamics(x, x0, μ=μx, σ=σx, dx=dx)
+        parser.dynamics.N[] = parser.dynamics.N[] + 1
+        xₚ = SystemDynamics(dname, x, x0, parser.dynamics.N[]; μ=μx, σ=σx)
         # push!(parser.dynamics.systems, x => xₚ)
 
         B = gensym(Symbol(:B_, irm))
-        B0 = :(one(eltype(state($srm))))
+        B0 = :(one(eltype(state($dname))))
         μB = :($(irm).r(t) * $B(t))
-        Bₚ = SystemDynamics(B, B0, μ=μB)
+        parser.dynamics.N[] = parser.dynamics.N[] + 1
+        Bₚ = SystemDynamics(gensym(Symbol(:dynamics, B)), B, B0, parser.dynamics.N[]; μ=μB)
         # push!(parser.dynamics.systems, B => Bₚ)
 
         paramsₚ = AffineParameters(κ, θ, Σ, α, β, ξ₀, ξ₁)
-        srmₚ = ShortRateModelDynamics{SRM}(irm, srm, paramsₚ, xₚ, Bₚ)
+        srmₚ = ShortRateModelDynamics{SRM}(irm, dname, paramsₚ, xₚ, Bₚ)
         push!(parser.dynamics.models, irm => srmₚ)
         # el ShortRateModelDynamics <: IntererestRateModelDynamics hace estas 2 cosas:
-        # srm = add_assignment!(iparameters, srm, :(MultiFactorAffine($x0, $κ, $θ, $Σ, $α, $β, $ξ₀, $ξ₁)), true)
         # for body in map(fparser -> getproperty(fparser, :body), (μiip, σiip, μoop, σoop))
         #     add_assignment!(body, irm, :(InterestRate($srm, $x, $B)), false)
         # end
@@ -123,30 +112,30 @@ function parse_srm!(parser, block)
         ξ₀ = attrs[:ξ₀]
         ξ₁ = attrs[:ξ₁]
 
-        # definimos un name para el short rate model en base al nombre del interest rate
-        srm = gensym(Symbol(:srm, irm))
+        dname = gensym(Symbol(:dynamics, irm))
 
         x = gensym(Symbol(:x_, irm))
-        dx = gensym(Symbol(:d, x))
         μx = Dict{Symbol,GeneralExpr}(
-            :IIP => :(drift!($dx, $x(t), parameters($srm), t)),
-            :OOP => :(drift($x(t), parameters($srm), t))
+            :IIP => :(drift!($(x).dx, $x(t), parameters($dname), t)),
+            :OOP => :(drift($x(t), parameters($dname), t))
         )
         σx = Dict{Symbol,GeneralExpr}(
-            :IIP => :(diffusion!($dx, $x(t), parameters($srm), t)),
-            :OOP => :(diffusion($x(t), parameters($srm), t))
+            :IIP => :(diffusion!($(x).dx, $x(t), parameters($dname), t)),
+            :OOP => :(diffusion($x(t), parameters($dname), t))
         )
-        xₚ = SystemDynamics(x, x0, μ=μx, σ=σx, dx=dx)
+        parser.dynamics.N[] = parser.dynamics.N[] + 1
+        xₚ = SystemDynamics(dname, x, x0, parser.dynamics.N[]; μ=μx, σ=σx)
         # push!(parser.dynamics.systems, x => xₚ)
 
         B = gensym(Symbol(:B_, irm))
-        B0 = :(one(eltype(state($srm))))
+        B0 = :(one(eltype(state($dname))))
         μB = :($(irm).r(t) * $B(t))
-        Bₚ = SystemDynamics(B, B0, μ=μB)
+        parser.dynamics.N[] = parser.dynamics.N[] + 1
+        Bₚ = SystemDynamics(gensym(Symbol(:dynamics, B)), B, B0, parser.dynamics.N[]; μ=μB)
         # push!(parser.dynamics.systems, B => Bₚ)
 
         paramsₚ = AffineParameters(κ, θ, Σ, α, β, ξ₀, ξ₁)
-        srmₚ = ShortRateModelDynamics{SRM}(irm, srm, paramsₚ, xₚ, Bₚ)
+        srmₚ = ShortRateModelDynamics{SRM}(irm, dname, paramsₚ, xₚ, Bₚ)
         push!(parser.dynamics.models, irm => srmₚ)
         # el ShortRateModelDynamics <: IntererestRateModelDynamics hace estas 2 cosas:
         # srm = add_assignment!(iparameters, srm, :(MultiFactorAffine($x0, $κ, $θ, $Σ, $α, $β, $ξ₀, $ξ₁)), true)
