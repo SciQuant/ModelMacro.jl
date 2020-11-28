@@ -109,6 +109,70 @@ prettify(@expand @model DS begin
 end)
 
 
+#= /Users/ramirovignolo/.julia/dev/ModelMacro/src/macro_model.jl:104 =#
+var"##f#555"((var"##du#552", var"##u#553", var"##p#554", t)) = begin
+    #= /Users/ramirovignolo/.julia/dev/ModelMacro/src/function.jl:24 =#
+    begin
+        $(Expr(:inbounds, true))
+        local var"#74#val" = begin
+                    #= /Users/ramirovignolo/.julia/dev/ModelMacro/src/function.jl:25 =#
+                    begin
+                        begin
+                            #= /Users/ramirovignolo/.julia/packages/UnPack/EkESO/src/UnPack.jl:100 =#
+                            local var"##557" = var"##p#554"
+                            #= /Users/ramirovignolo/.julia/packages/UnPack/EkESO/src/UnPack.jl:101 =#
+                            begin
+                                x0 = (UnPack).unpack(var"##557", Val{:x0}())
+                                ξ₀ = (UnPack).unpack(var"##557", Val{:ξ₀}())
+                                ξ₁ = (UnPack).unpack(var"##557", Val{:ξ₁}())
+                                ϰ = (UnPack).unpack(var"##557", Val{:ϰ}())
+                                θ = (UnPack).unpack(var"##557", Val{:θ}())
+                                Σ = (UnPack).unpack(var"##557", Val{:Σ}())
+                                α = (UnPack).unpack(var"##557", Val{:α}())
+                                β = (UnPack).unpack(var"##557", Val{:β}())
+                                a = (UnPack).unpack(var"##557", Val{:a}())
+                                var"##dynamicsIR1#539" = (UnPack).unpack(var"##557", Val{Symbol("##dynamicsIR1#539")}())
+                                var"##dynamics##B_IR1#541#542" = (UnPack).unpack(var"##557", Val{Symbol("##dynamics##B_IR1#541#542")}())
+                                var"##dynamicsIR2#543" = (UnPack).unpack(var"##557", Val{Symbol("##dynamicsIR2#543")}())
+                                var"##dynamics##B_IR2#545#546" = (UnPack).unpack(var"##557", Val{Symbol("##dynamics##B_IR2#545#546")}())
+                                var"##x#547" = (UnPack).unpack(var"##557", Val{Symbol("##x#547")}())
+                                var"##y#548" = (UnPack).unpack(var"##557", Val{Symbol("##y#548")}())
+                                var"##z#549" = (UnPack).unpack(var"##557", Val{Symbol("##z#549")}())
+                                var"##D#550" = (UnPack).unpack(var"##557", Val{Symbol("##D#550")}())
+                                var"##M#551" = (UnPack).unpack(var"##557", Val{Symbol("##M#551")}())
+                            end
+                            #= /Users/ramirovignolo/.julia/packages/UnPack/EkESO/src/UnPack.jl:102 =#
+                            var"##557"
+                        end
+                        var"##x_IR1#540" = Security{dimension(var"##dynamicsIR1#539"), noise_dimension(var"##dynamicsIR1#539"), true}(var"##du#552", var"##u#553", t, 1:dimension(var"##D#550"[1]))
+                        var"##B_IR1#541" = Security{dimension(var"##dynamics##B_IR1#541#542"), noise_dimension(var"##dynamics##B_IR1#541#542"), true}(var"##du#552", var"##u#553", t, dimension(var"##D#550"[1]) + 1:dimension(var"##D#550"[2]))
+                        IR1 = FixedIncomeSecurities(var"##dynamicsIR1#539", var"##x_IR1#540", var"##B_IR1#541")
+                        var"##x_IR2#544" = Security{dimension(var"##dynamicsIR2#543"), noise_dimension(var"##dynamicsIR2#543"), true}(var"##du#552", var"##u#553", t, dimension(var"##D#550"[2]) + 1:dimension(var"##D#550"[3]))
+                        var"##B_IR2#545" = Security{dimension(var"##dynamics##B_IR2#545#546"), noise_dimension(var"##dynamics##B_IR2#545#546"), true}(var"##du#552", var"##u#553", t, dimension(var"##D#550"[3]) + 1:dimension(var"##D#550"[4]))
+                        IR2 = FixedIncomeSecurities(var"##dynamicsIR2#543", var"##x_IR2#544", var"##B_IR2#545")
+                        x = Security{dimension(var"##x#547"), noise_dimension(var"##x#547"), true}(var"##du#552", var"##u#553", t, dimension(var"##D#550"[4]) + 1:dimension(var"##D#550"[5]))
+                        y = Security{dimension(var"##y#548"), noise_dimension(var"##y#548"), true}(var"##du#552", var"##u#553", t, dimension(var"##D#550"[5]) + 1:dimension(var"##D#550"[6]))
+                        z = Security{dimension(var"##z#549"), noise_dimension(var"##z#549"), true}(var"##du#552", var"##u#553", t, dimension(var"##D#550"[6]) + 1:dimension(var"##D#550"[7]))
+                    end
+                    #= /Users/ramirovignolo/.julia/dev/ModelMacro/src/function.jl:26 =#
+                    begin
+                        drift!((var"##x_IR1#540").dx, var"##x_IR1#540"(t), parameters(var"##dynamicsIR1#539"), t)
+                        (var"##B_IR1#541").dx[] = IR1.r(t) * var"##B_IR1#541"(t)
+                        drift!((var"##x_IR2#544").dx, var"##x_IR2#544"(t), parameters(var"##dynamicsIR2#543"), t)
+                        (var"##B_IR2#545").dx[] = IR2.r(t) * var"##B_IR2#545"(t)
+                        nothing
+                        nothing
+                        nothing
+                    end
+                    #= /Users/ramirovignolo/.julia/dev/ModelMacro/src/function.jl:27 =#
+                    return nothing
+                end
+        $(Expr(:inbounds, :pop))
+        var"#74#val"
+    end
+end
+
+
 
 # struct Security{T}
 #     x::T

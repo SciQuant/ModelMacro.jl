@@ -16,8 +16,6 @@ end
 lefthandside(a::AssignmentExpr) = a.lhs
 righthandside(a::AssignmentExpr) = a.rhs
 
-const AssignmentOrGeneralExpr = Union{AssignmentExpr,GeneralExpr}
-
 function add_assignment!(assignments, lhs, rhs, gensymed)
     lhs = gensymed ? gensym(lhs) : lhs
     push!(assignments, AssignmentExpr(lhs, rhs))
@@ -26,7 +24,3 @@ end
 
 import Base: convert
 convert(::Type{Expr}, a::AssignmentExpr) = Expr(:(=), a.lhs, a.rhs)
-
-# Base.push!(args::Array{Any,1}, a::Vector{AssignmentOrGeneralExpr}) = push!.(Ref(args), a)
-# Base.push!(args::Array{Any,1}, a::Vector{AssignmentExpr}) = push!.(Ref(args), a)
-# Base.push!(args::Array{Any,1}, a::AssignmentExpr) = push!(args, convert(Expr, a))

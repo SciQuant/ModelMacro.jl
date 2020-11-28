@@ -2,7 +2,6 @@
 struct SystemDynamics
     dname::Symbol # dynamics name
     sname::Symbol # security name
-    # dx::Symbol
     x0::GeneralExpr
     m::GeneralExprOrNothing
     μ::Union{GeneralExprOrNothing,Dict{Symbol,GeneralExpr}}

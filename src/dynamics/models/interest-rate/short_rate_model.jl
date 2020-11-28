@@ -21,7 +21,7 @@ struct QuadraticParameters <: ShortRateParameters
 end
 
 struct ShortRateModelDynamics{T} <: InterestRateModelDynamics
-    irm::Symbol
+    sname::Symbol # security name
     dname::Symbol # dynamics name
     params::ShortRateParameters
     x::SystemDynamics
@@ -88,7 +88,7 @@ function parse_srm!(parser, block)
 
         B = gensym(Symbol(:B_, irm))
         B0 = :(one(eltype(state($dname))))
-        μB = :($(irm).r(t) * $B(t))
+        μB = :($(B).dx[] = $(irm).r(t) * $B(t))
         parser.dynamics.N[] = parser.dynamics.N[] + 1
         Bₚ = SystemDynamics(gensym(Symbol(:dynamics, B)), B, B0, parser.dynamics.N[]; μ=μB)
         # push!(parser.dynamics.systems, B => Bₚ)
@@ -129,7 +129,7 @@ function parse_srm!(parser, block)
 
         B = gensym(Symbol(:B_, irm))
         B0 = :(one(eltype(state($dname))))
-        μB = :($(irm).r(t) * $B(t))
+        μB = :($(B).dx[] = $(irm).r(t) * $B(t))
         parser.dynamics.N[] = parser.dynamics.N[] + 1
         Bₚ = SystemDynamics(gensym(Symbol(:dynamics, B)), B, B0, parser.dynamics.N[]; μ=μB)
         # push!(parser.dynamics.systems, B => Bₚ)
