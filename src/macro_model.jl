@@ -138,12 +138,12 @@ end
 
 # estamos pensando en algo que es para f y ademas IIP, luego implemetar dispatch
 function security_assignment(model::ShortRateModelDynamics, du, u, D)
-    @unpack sname, dname, x, B = model
+    @unpack securities, dynamics, x, B = model
     ax = security_assignment(x, du, u, D)
     aB = security_assignment(B, du, u, D)
 
-    lhs = sname
-    rhs = :(FixedIncomeSecurities($dname, $(ax.lhs), $(aB.lhs)))
+    lhs = securities
+    rhs = :(FixedIncomeSecurities($dynamics, $(ax.lhs), $(aB.lhs)))
     aFI = AssignmentExpr(lhs, rhs)
 
     return [ax, aB, aFI]
@@ -178,7 +178,7 @@ function drift_assignment(system::SystemDynamics)
     μ = system.μ
 
     if isnothing(μ)
-        return nothing # Expr(:tuple) # jajajaj ! cambialo rami
+        return nothing
     end
 
     return μ isa Dict ? μ[:IIP] : μ

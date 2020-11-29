@@ -60,10 +60,16 @@ prettify(@expand @model DS begin
     @system x begin
         x₀ → 1.
         m → NonDiagonalNoise(2)
+        μ → begin # fx(x.dx, ...) # entonces esta termina siendo una buena opcion tambien, mandar fx(dx, ...)
+            x.dx[] = x(t) + 2
+            # para dimensiones mayores a 1 estoy pensando, igual no sirve porque la operacion del lhs del copy puede allocar y lo mismo para el otro caso! jajaj
+            x.dx[:] .= x(t) + 2 # para dimensiones mayores a 1 podemos poner en el codigo. claramente aca yo no conozco la dimension
+            copyto!(x.dx, x(t) + 2) # tambien podemos hacer esto en el fuente, el copyto! lo pongo yo. el tema es que cuando la dimension es uno, conviene el primero.
+        end
     end
 
     @system y begin
-        x₀ → 1.
+        x₀ → [1., 2.]
         m → NonDiagonalNoise(4)
         ρ → ρy
     end

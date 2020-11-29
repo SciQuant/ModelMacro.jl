@@ -5,7 +5,7 @@ Macro arguments may include expressions, literal values, and symbols. Literal va
 `Number`, `Char`, `String`, and probably others. `GeneralExpr` limits literals to `Numbers`
 since we do not expect to work with others.
 """
-const GeneralExpr = Union{Expr,Number,Symbol}
+const GeneralExpr = Union{Expr,Number,Symbol} # julia usa Any para expresar block.args...
 const GeneralExprOrNothing = Union{GeneralExpr,Nothing}
 
 struct AssignmentExpr

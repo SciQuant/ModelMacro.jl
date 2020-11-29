@@ -13,7 +13,6 @@ function generate_withkw_macro(a::Vector{AssignmentExpr})
     t = Expr(:tuple)
     push!(t.args, convert.(Expr, a)...)
     macro_expr = Expr(:macrocall, Symbol("@with_kw"), :nothing, t)
-    # macro_call = macro_call = Expr(:(=), p.name[], macro_expr)
     return macro_expr
 end
 

@@ -1,3 +1,4 @@
+
 @enum ParserReturn UMC_PARSER_OK UMC_PARSER_ERROR
 
 for head in (:block, :tuple, :macrocall)

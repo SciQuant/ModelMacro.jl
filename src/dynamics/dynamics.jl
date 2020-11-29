@@ -4,14 +4,13 @@ include("system/system.jl")
 include("models/models.jl")
 
 struct Dynamics
-    N::Array{Int64,0} # la cantidad de systems definidos hasta el momento, mientras voy parseando
     systems::OrderedDict{Symbol,SystemDynamics}
     models::OrderedDict{Symbol,ModelDynamics}
 end
 
 function Dynamics()
+    reset_system_counter()
     return Dynamics(
-        zeros(Int64),
         OrderedDict{Symbol,SystemDynamics}(),
         OrderedDict{Symbol,ModelDynamics}()
     )
@@ -21,8 +20,6 @@ end
 function generate_functions(d::Dynamics) end # generates dynamics functions
 
 
-# genero un array de AssignmentExpr de dynamicas, el resultado de esta funcion se pasa a una
-# expresion tupla o block
 function generate_dynamics(dynamics::Dynamics)
     models = values(dynamics.models)
     systems = values(dynamics.systems)
@@ -31,12 +28,12 @@ function generate_dynamics(dynamics::Dynamics)
 end
 
 function dynamics_assignment(model::ShortRateModelDynamics{:OneFactorAffine})
-    @unpack dname, params, x, B = model
+    @unpack dynamics, params, x, B = model
     @unpack κ, θ, Σ, α, β, ξ₀, ξ₁ = params
     kwargs = Expr(:tuple)
     isnothing(ξ₀) ? nothing : push!(kwargs.args, :(ξ₀ = $ξ₀))
     isnothing(ξ₁) ? nothing : push!(kwargs.args, :(ξ₁ = $ξ₁))
-    lhs = dname
+    lhs = dynamics
     rhs = :(OneFactorAffineModelDynamics($(x.x0), $κ, $θ, $Σ, $α, $β; $kwargs...))
     ax = AssignmentExpr(lhs, rhs)
     aB = dynamics_assignment(B)
@@ -44,9 +41,9 @@ function dynamics_assignment(model::ShortRateModelDynamics{:OneFactorAffine})
 end
 
 function dynamics_assignment(model::ShortRateModelDynamics{:MultiFactorAffine})
-    @unpack dname, params, x, B = model
+    @unpack dynamics, params, x, B = model
     @unpack κ, θ, Σ, α, β, ξ₀, ξ₁ = params
-    lhs = dname
+    lhs = dynamics
     rhs = :(MultiFactorAffineModelDynamics($(x.x0), $κ, $θ, $Σ, $α, $β, $ξ₀, $ξ₁))
     ax = AssignmentExpr(lhs, rhs)
     aB = dynamics_assignment(B)
