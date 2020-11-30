@@ -90,18 +90,29 @@ macro model(name, body)
     f = Function{true}(gensym(:f), args=Expr(:tuple, du, u, p, t))
     unpack = generate_unpack_macro(lefthandside.(params), p)
     securities = generate_securities(parser.dynamics, du, u, lefthandside(D))
-    drifts = generate_drifts(parser.dynamics)
+    drifts = generate_drifts(parser.dynamics, Val(:IIP))
     push!(f.header.args, unpack)
     push!(f.header.args, convert.(Expr, securities)...)
-    push!(f.body.args, drifts...)
+    push!(f.body.args, convert.(Expr, drifts)...)
     fexpr = convert(Expr, f)
 
+    f = Function{false}(f.name, args=Expr(:tuple, u, p, t))
+    unpack = unpack
+    securities = generate_securities(parser.dynamics, u, lefthandside(D))
+    drifts = generate_drifts(parser.dynamics, Val(:OOP))
+    output = generate_output(drifts)
+    push!(f.header.args, unpack)
+    push!(f.header.args, convert.(Expr, securities)...)
+    push!(f.body.args, convert.(Expr, drifts)...)
+    push!(f.output.args, output)
+    fiipexpr = convert(Expr, f)
 
     ex = quote
 
         $(esc(call))
 
         $fexpr
+        $fiipexpr
 
     #     # en realidad me va a dar en el nombre del model un dynamicalsystem
     #     $(esc(name)) = begin
@@ -132,7 +143,15 @@ end
 function generate_securities(dynamics::Dynamics, du, u, D)
     models = values(dynamics.models)
     systems = values(dynamics.systems)
-    ss = vcat(security_assignment.(models, Ref(du), Ref(u), Ref(D))..., security_assignment.(systems, Ref(du), Ref(u), Ref(D))...)
+    ss = vcat(security_assignment.(models, du, u, D)..., security_assignment.(systems, du, u, D)...)
+    return ss
+end
+
+# OOP
+function generate_securities(dynamics::Dynamics, u, D)
+    models = values(dynamics.models)
+    systems = values(dynamics.systems)
+    ss = vcat(security_assignment.(models, u, D)..., security_assignment.(systems, u, D)...)
     return ss
 end
 
@@ -141,6 +160,19 @@ function security_assignment(model::ShortRateModelDynamics, du, u, D)
     @unpack securities, dynamics, x, B = model
     ax = security_assignment(x, du, u, D)
     aB = security_assignment(B, du, u, D)
+
+    lhs = securities
+    rhs = :(FixedIncomeSecurities($dynamics, $(ax.lhs), $(aB.lhs)))
+    aFI = AssignmentExpr(lhs, rhs)
+
+    return [ax, aB, aFI]
+end
+
+# OOP
+function security_assignment(model::ShortRateModelDynamics, u, D)
+    @unpack securities, dynamics, x, B = model
+    ax = security_assignment(x, u, D)
+    aB = security_assignment(B, u, D)
 
     lhs = securities
     rhs = :(FixedIncomeSecurities($dynamics, $(ax.lhs), $(aB.lhs)))
@@ -160,28 +192,41 @@ function security_assignment(system::SystemDynamics, du, u, D)
     return AssignmentExpr(lhs, rhs)
 end
 
-function generate_drifts(dynamics::Dynamics)
+# OOP
+function security_assignment(system::SystemDynamics, u, D)
+    @unpack dname, sname, idx = system
+    lhs = sname
+    idx_D_from = idx - 1
+    idx_D_to = idx
+    D_from = iszero(idx_D_from) ? 1 : :(dimension($D[$idx_D_from]) + 1)
+    D_to = :(dimension($D[$idx_D_to]))
+    rhs = :(Security{dimension($dname),noise_dimension($dname),true}($u, t, $D_from:$D_to))
+    return AssignmentExpr(lhs, rhs)
+end
+
+function generate_drifts(dynamics::Dynamics, case::Union{Val{:IIP},Val{:OOP}})
     models = values(dynamics.models)
     systems = values(dynamics.systems)
-    ds = vcat(drift_assignment.(models)..., drift_assignment.(systems)...)
+    ds = vcat(drift_assignment.(models, case)..., drift_assignment.(systems, case)...)
     return ds
 end
 
-function drift_assignment(model::ShortRateModelDynamics)
+function drift_assignment(model::ShortRateModelDynamics, case::Union{Val{:IIP},Val{:OOP}})
     @unpack x, B = model
-    ax = drift_assignment(x)
-    aB = drift_assignment(B)
+    ax = drift_assignment(x, case)
+    aB = drift_assignment(B, case)
     return [ax, aB]
 end
 
-function drift_assignment(system::SystemDynamics)
-    μ = system.μ
+function drift_assignment(system::SystemDynamics, case::Union{Val{:IIP},Val{:OOP}})
+    @unpack μ = system
+    return μ isa Dict ? AssignmentExpr(gensym(), μ[case]) : AssignmentExpr(gensym(), μ)
+end
 
-    if isnothing(μ)
-        return nothing
-    end
-
-    return μ isa Dict ? μ[:IIP] : μ
+function generate_output(drifts::Vector{AssignmentExpr})
+    t = Expr(:tuple)
+    push!(t.args, Expr.(:call, :SVector, lefthandside.(drifts))...)
+    return Expr(:call, :vcat, t)
 end
 
 function parse_macro_model!(parser, model)

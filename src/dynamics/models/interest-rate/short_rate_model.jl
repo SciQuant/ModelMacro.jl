@@ -12,6 +12,10 @@ struct ShortRateModelDynamics{T} <: InterestRateModelDynamics
     B::SystemDynamics
 end
 
+const ASRMs = (:OneFactorAffine, :MultiFactorAffine)
+const QSRMs = (:OneFactorQuadratic, :MultiFactorQuadratic)
+const SRMs = (ASRMs..., QSRMs...)
+
 macro_keys(::Val{:OneFactorAffine}) = (:InterestRateModel, :ShortRateModel, :r₀, :κ, :θ, :Σ, :α, :β), (:ξ₀, :ξ₁)
 macro_keys(::Val{:MultiFactorAffine}) = (:InterestRateModel, :ShortRateModel, :x₀, :κ, :θ, :Σ, :α, :β, :ξ₀, :ξ₁), ()
 macro_keys(::Val{:OneFactorQuadratic}) = (:InterestRateModel, :ShortRateModel, :x₀, :κ, :θ, :σ, :ξ₀, :ξ₁, :ξ₂), ()
@@ -29,7 +33,7 @@ function parse_srm!(parser, block)
         throw(ArgumentError("missing `ShortRateModel` field in `@interest_rate` '$(string(securities))'."))
     end
 
-    if !(srm in (:OneFactorAffine, :MultiFactorAffine, :OneFactorQuadratic, :MultiFactorQuadratic))
+    if !(srm in SRMs)
         throw(ArgumentError("the provided ShortRateModel *must* be <: `ShortRateModel`."))
     end
 
@@ -40,7 +44,7 @@ function parse_srm!(parser, block)
     required_keys, optional_keys = macro_keys(Val(srm))
     attrs = parse_attributes!(block, required_keys, optional_keys)
 
-    if srm in (:OneFactorAffine, :MultiFactorAffine)
+    if srm in ASRMs
 
         x0 = isequal(srm, :OneFactorAffine) ? attrs[:r₀] : attrs[:x₀]
         κ  = attrs[:κ]
@@ -53,7 +57,7 @@ function parse_srm!(parser, block)
 
         paramsₚ = AffineParameters(κ, θ, Σ, α, β, ξ₀, ξ₁)
 
-    elseif srm in (:OneFactorQuadratic, :MultiFactorQuadratic)
+    elseif srm in QSRMs
 
         x0 = attrs[:x₀]
         κ  = attrs[:κ]
@@ -69,20 +73,23 @@ function parse_srm!(parser, block)
     dynamics = gensym(Symbol(:dynamics, securities))
 
     x = gensym(Symbol(:x_, securities))
-    μx = Dict{Symbol,GeneralExpr}(
-        :IIP => :(drift!($(x).dx, $x(t), parameters($dynamics), t)),
-        :OOP => :(drift($x(t), parameters($dynamics), t))
+    μx = Dict{Val,GeneralExpr}(
+        Val(:IIP) => :(drift!($(x).dx, $x(t), parameters($dynamics), t)),
+        Val(:OOP) => :(drift($x(t), parameters($dynamics), t))
     )
-    σx = Dict{Symbol,GeneralExpr}(
-        :IIP => :(diffusion!($(x).dx, $x(t), parameters($dynamics), t)),
-        :OOP => :(diffusion($x(t), parameters($dynamics), t))
+    σx = Dict{Val,GeneralExpr}(
+        Val(:IIP) => :(diffusion!($(x).dx, $x(t), parameters($dynamics), t)),
+        Val(:OOP) => :(diffusion($x(t), parameters($dynamics), t))
     )
-    xₚ = SystemDynamics(dynamics, x, x0, system_counter(); μ=μx, σ=σx)
+    xₚ = SystemDynamics(dynamics, x, system_counter(), x0; μ=μx, σ=σx)
 
     B = gensym(Symbol(:B_, securities))
     B0 = :(one(eltype(state($dynamics))))
-    μB = :($(B).dx[] = $(securities).r(t) * $B(t))
-    Bₚ = SystemDynamics(gensym(Symbol(:dynamics, B)), B, B0, system_counter(); μ=μB)
+    μB = Dict{Val,GeneralExpr}(
+        Val(:IIP) => :($(B).dx[] = $(securities).r(t) * $B(t)),
+        Val(:OOP) => :($(securities).r(t) * $B(t))
+    )
+    Bₚ = SystemDynamics(gensym(Symbol(:dynamics, B)), B, system_counter(), B0; μ=μB)
 
     srmₚ = ShortRateModelDynamics{srm}(securities, dynamics, paramsₚ, xₚ, Bₚ)
     push!(parser.dynamics.models, securities => srmₚ)

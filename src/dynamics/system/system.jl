@@ -12,15 +12,15 @@ struct SystemDynamics
     dname::Symbol # dynamics name
     sname::Symbol # security name
     x0::GeneralExpr
+    μ::Union{GeneralExprOrNothing,Dict{Val,GeneralExpr}}
+    σ::Union{GeneralExprOrNothing,Dict{Val,GeneralExpr}}
     m::GeneralExprOrNothing
-    μ::Union{GeneralExprOrNothing,Dict{Symbol,GeneralExpr}}
-    σ::Union{GeneralExprOrNothing,Dict{Symbol,GeneralExpr}}
     ρ::GeneralExprOrNothing
     idx::Int64
 end
 
-SystemDynamics(dname, sname, x0, idx; μ=nothing, σ=nothing, m=nothing, ρ=nothing) =
-    SystemDynamics(dname, sname, x0, m, μ, σ, ρ, idx)
+SystemDynamics(dname, sname, idx, x0; μ=nothing, σ=nothing, m=nothing, ρ=nothing) =
+    SystemDynamics(dname, sname, x0, μ, σ, m, ρ, idx)
 
 function parse_system!(parser, block)
 
@@ -42,7 +42,10 @@ function parse_system!(parser, block)
     σ = get(attrs, :σ, nothing)
     ρ = get(attrs, :ρ, nothing)
 
-    push!(parser.dynamics.systems, name => SystemDynamics(gensym(name), name, x0, system_counter(); μ=μ, σ=σ, m=m, ρ=ρ))
+    push!(
+        parser.dynamics.systems, name =>
+            SystemDynamics(gensym(name), name, system_counter(), x0; μ=μ, σ=σ, m=m, ρ=ρ)
+    )
 
     return UMC_PARSER_OK
 end

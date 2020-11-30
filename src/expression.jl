@@ -10,7 +10,7 @@ const GeneralExprOrNothing = Union{GeneralExpr,Nothing}
 
 struct AssignmentExpr
     lhs::Symbol
-    rhs::GeneralExpr
+    rhs::Any
 end
 
 lefthandside(a::AssignmentExpr) = a.lhs

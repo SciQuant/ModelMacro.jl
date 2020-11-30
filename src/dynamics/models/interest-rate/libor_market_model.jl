@@ -39,7 +39,7 @@ function parse_lmm!(parser, block)
         :IIP => :(diffusion!($(L).dx, $x(t), parameters($dynamics), t)),
         :OOP => :(diffusion($L(t), parameters($dynamics), t))
     )
-    Lₚ = SystemDynamics(dynamics, L, L0, system_counter(); μ=μL, σ=σL)
+    Lₚ = SystemDynamics(dynamics, L, system_counter(), L0; μ=μL, σ=σL)
 
     lmmₚ = LiborMarketModelDynamics(securities, dynamics, paramsₚ, Lₚ)
     push!(parser.dynamics.models, securities => lmmₚ)

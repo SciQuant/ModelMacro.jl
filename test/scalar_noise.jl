@@ -60,11 +60,28 @@ prettify(@expand @model DS begin
     @system x begin
         x₀ → 1.
         m → NonDiagonalNoise(2)
-        μ → begin # fx(x.dx, ...) # entonces esta termina siendo una buena opcion tambien, mandar fx(dx, ...)
-            x.dx[] = x(t) + 2
-            # para dimensiones mayores a 1 estoy pensando, igual no sirve porque la operacion del lhs del copy puede allocar y lo mismo para el otro caso! jajaj
-            x.dx[:] .= x(t) + 2 # para dimensiones mayores a 1 podemos poner en el codigo. claramente aca yo no conozco la dimension
-            copyto!(x.dx, x(t) + 2) # tambien podemos hacer esto en el fuente, el copyto! lo pongo yo. el tema es que cuando la dimension es uno, conviene el primero.
+
+        # IIP
+        # μ → begin
+        #     x.dx[1] = expr_que_evalua_a_escalar
+        #     x.dx[2] = expr_que_evalua_a_escalar
+        #     # or
+        #     f(x.dx, argumentos_que_queramos...) # f es una funcion que hace inplace operations sobre x.dx
+        #     # or
+        #     mul!(x.dx, argumentos_que_queramos...) # directamente una operation inplace que ya exista
+        #     # Hint:
+        #     # no importa que retornamos al final porque modificamos inplace
+        # end
+
+        # OOP
+        μ → begin
+            dx1 = expr_que_evalua_a_escalar
+            dx2 = expr_que_evalua_a_escalar_o_vector
+            SVector{2}(dx1, dx2) # esto se retorna # otro hint: SVector{dimension(x)}(...)  y para σ SMatrix{dimension(x),noise_dimension(x)}([...])
+            # o tambien podemos retornar
+            vcat(SVector(dx1), dx2) # si es que dx2 es un vector
+            # or, directamente
+            dx = expr_que_evalua_a_vector # aca una expr que evalue un SArray, asi que retornamos, incluso el dx no es necesario
         end
     end
 
