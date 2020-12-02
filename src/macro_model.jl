@@ -23,8 +23,8 @@ Mas intro...
         dX⃗ = μ⃗ ⋅ dt + σ⃗ ⋅ dW
 
         @system (S, I, R) begin
-            m → ScalarNoise
             x₀ → @SVector ones(3)
+            m → ScalarNoise
             μ → ... # returns a vector of size = (3, )
             σ → ... # returns a vector of size = (3, )
         end
@@ -32,8 +32,8 @@ Mas intro...
         dX⃗ = μ⃗ ⋅ dt + σ⃗ ⋅ dW⃗
 
         @system (S, I, R) begin
-            m → DiagonalNoise
             x₀ → @SVector ones(3)
+            m → DiagonalNoise(3)
             μ → ... # returns a vector of size = (3, )
             σ → ... # returns a vector of size = (3, )
             ρ → ... # constant matrix of size = (3, 3)
@@ -42,8 +42,8 @@ Mas intro...
         dX⃗ = μ⃗ ⋅ dt + σ ⋅ dW⃗(t)
 
         @system (S, I, R) begin
-            m → NonDiagonalNoise(4)
             x₀ → @SVector ones(3)
+            m → NonDiagonalNoise(4)
             μ → ... # returns a vector of size = (3, )
             σ → ... # returns a matrix of size = (3, 4)
             ρ → ... # constant matrix of size = (4, 4)
@@ -85,8 +85,7 @@ macro model(name, body)
     p = gensym(:p)
     t = :t
 
-    # ahora creo las funciones y las pueblo
-    # empecemos por la mas facil, μiip
+    # f IIP
     f = Function{true}(gensym(:f), args=Expr(:tuple, du, u, p, t))
     unpack = generate_unpack_macro(lefthandside.(params), p)
     securities = generate_securities(parser.dynamics, du, u, lefthandside(D))
@@ -94,8 +93,9 @@ macro model(name, body)
     push!(f.header.args, unpack)
     push!(f.header.args, convert.(Expr, securities)...)
     push!(f.body.args, convert.(Expr, drifts)...)
-    fexpr = convert(Expr, f)
+    f_iip = convert(Expr, f)
 
+    # f OOP
     f = Function{false}(f.name, args=Expr(:tuple, u, p, t))
     unpack = unpack
     securities = generate_securities(parser.dynamics, u, lefthandside(D))
@@ -105,14 +105,67 @@ macro model(name, body)
     push!(f.header.args, convert.(Expr, securities)...)
     push!(f.body.args, convert.(Expr, drifts)...)
     push!(f.output.args, output)
-    fiipexpr = convert(Expr, f)
+    f_oop = convert(Expr, f)
+
+    # g IIP + DN
+    g = Function{true}(gensym(:g), args=Expr(:tuple, du, u, p, t))
+    unpack = unpack
+    securities = generate_securities(parser.dynamics, du, u, lefthandside(D))
+    diffusions = generate_diffusions(parser.dynamics, Val(:IIP)) # Val(:DN)
+    push!(g.header.args, unpack)
+    push!(g.header.args, convert.(Expr, securities)...)
+    push!(g.body.args, convert.(Expr, diffusions)...)
+    g_iip_dn = convert(Expr, g)
+
+    # g OOP + DN
+    g = Function{false}(gensym(:g), args=Expr(:tuple, u, p, t))
+    unpack = unpack
+    securities = generate_securities(parser.dynamics, u, lefthandside(D))
+    diffusions = generate_diffusions(parser.dynamics, Val(:OOP)) # Val(:DN)
+    output = generate_output(diffusions)
+    push!(g.header.args, unpack)
+    push!(g.header.args, convert.(Expr, securities)...)
+    push!(g.body.args, convert.(Expr, diffusions)...)
+    push!(g.output.args, output)
+    g_oop_dn = convert(Expr, g)
+
+    # g IIP + NDN
+    g = Function{true}(gensym(:g), args=Expr(:tuple, du, u, p, t))
+    unpack = unpack
+    securities = generate_securities(parser.dynamics, du, u, lefthandside(D), lefthandside(M))
+    diffusions = generate_diffusions(parser.dynamics, Val(:IIP)) # Val(:NDN)
+    push!(g.header.args, unpack)
+    push!(g.header.args, convert.(Expr, securities)...)
+    push!(g.body.args, convert.(Expr, diffusions)...)
+    g_iip_ndn = convert(Expr, g)
+
+    # g OOP + NDN
+    g = Function{false}(gensym(:g), args=Expr(:tuple, u, p, t))
+    unpack = unpack
+    securities = generate_securities(parser.dynamics, u, lefthandside(D)) # no necesita M
+    diffusions = generate_diffusions(parser.dynamics, Val(:OOP)) # Val(:NDN)
+    output = generate_output(diffusions) # esto no es correcto, necesitamos construir una block static matrix, see issue #856 in StaticArrays
+    push!(g.header.args, unpack)
+    push!(g.header.args, convert.(Expr, securities)...)
+    push!(g.body.args, convert.(Expr, diffusions)...)
+    push!(g.output.args, output) # see above
+    g_oop_ndn = convert(Expr, g)
+
+    # dsd = Expr(:curly, :DynamicalSystemDrift, :IIP, :DN)
+    # fexpr = quote
+    #     $(esc(dsd))($f_iip, $f_oop)
+    # end
+    # fexpr = Expr(:call, Expr(:curly, :DynamicalSystemDrift, :IIP, :DN), f_iip, f_oop)
 
     ex = quote
 
         $(esc(call))
 
-        $fexpr
-        $fiipexpr
+        # la realidad es que las funciones argumento van a un constructor de DynamicalSystem
+        # y ahi dentro, una vez calculado IIP y DN, se instancia a DynamicalSystemDrift y a
+        # DynamicalSystemDiffusion.
+        f = DynamicalSystemDrift{IIP}($f_iip, $f_oop)\
+        g = DynamicalSystemDiffusion{IIP,DN}($g_iip_dn, $g_oop_dn, $g_iip_ndn, $g_oop_ndn)
 
     #     # en realidad me va a dar en el nombre del model un dynamicalsystem
     #     $(esc(name)) = begin
@@ -140,6 +193,7 @@ function generate_unpack_macro(paramsnames, p)
     return macro_expr
 end
 
+# f IIP - g IIP + DN
 function generate_securities(dynamics::Dynamics, du, u, D)
     models = values(dynamics.models)
     systems = values(dynamics.systems)
@@ -147,7 +201,7 @@ function generate_securities(dynamics::Dynamics, du, u, D)
     return ss
 end
 
-# OOP
+# f OOP - g OOP + DN - (creo que tambien para g OOP + NDN)
 function generate_securities(dynamics::Dynamics, u, D)
     models = values(dynamics.models)
     systems = values(dynamics.systems)
@@ -155,7 +209,15 @@ function generate_securities(dynamics::Dynamics, u, D)
     return ss
 end
 
-# estamos pensando en algo que es para f y ademas IIP, luego implemetar dispatch
+# g IIP + NDN
+function generate_securities(dynamics::Dynamics, du, u, D, M)
+    models = values(dynamics.models)
+    systems = values(dynamics.systems)
+    ss = vcat(security_assignment.(models, du, u, D, M)..., security_assignment.(systems, du, u, D, M)...)
+    return ss
+end
+
+# f IIP - g IIP + DN
 function security_assignment(model::ShortRateModelDynamics, du, u, D)
     @unpack securities, dynamics, x, B = model
     ax = security_assignment(x, du, u, D)
@@ -168,7 +230,7 @@ function security_assignment(model::ShortRateModelDynamics, du, u, D)
     return [ax, aB, aFI]
 end
 
-# OOP
+# f OOP - g OOP + DN
 function security_assignment(model::ShortRateModelDynamics, u, D)
     @unpack securities, dynamics, x, B = model
     ax = security_assignment(x, u, D)
@@ -181,6 +243,20 @@ function security_assignment(model::ShortRateModelDynamics, u, D)
     return [ax, aB, aFI]
 end
 
+# g IIP + NDN
+function security_assignment(model::ShortRateModelDynamics, du, u, D, M)
+    @unpack securities, dynamics, x, B = model
+    ax = security_assignment(x, du, u, D, M)
+    aB = security_assignment(B, du, u, D, M)
+
+    lhs = securities
+    rhs = :(FixedIncomeSecurities($dynamics, $(ax.lhs), $(aB.lhs)))
+    aFI = AssignmentExpr(lhs, rhs)
+
+    return [ax, aB, aFI]
+end
+
+# f IIP - g IIP + DN
 function security_assignment(system::SystemDynamics, du, u, D)
     @unpack dname, sname, idx = system
     lhs = sname
@@ -192,7 +268,7 @@ function security_assignment(system::SystemDynamics, du, u, D)
     return AssignmentExpr(lhs, rhs)
 end
 
-# OOP
+# f OOP - g OOP + DN
 function security_assignment(system::SystemDynamics, u, D)
     @unpack dname, sname, idx = system
     lhs = sname
@@ -201,6 +277,22 @@ function security_assignment(system::SystemDynamics, u, D)
     D_from = iszero(idx_D_from) ? 1 : :(dimension($D[$idx_D_from]) + 1)
     D_to = :(dimension($D[$idx_D_to]))
     rhs = :(Security{dimension($dname),noise_dimension($dname),true}($u, t, $D_from:$D_to))
+    return AssignmentExpr(lhs, rhs)
+end
+
+# g IIP + NDN
+function security_assignment(system::SystemDynamics, du, u, D, M)
+    @unpack dname, sname, idx = system
+    lhs = sname
+    idx_D_from = idx - 1
+    idx_D_to = idx
+    D_from = iszero(idx_D_from) ? 1 : :(dimension($D[$idx_D_from]) + 1)
+    D_to = :(dimension($D[$idx_D_to]))
+    idx_M_from = idx - 1
+    idx_M_to = idx
+    M_from = iszero(idx_M_from) ? 1 : :(noise_dimension($M[$idx_M_from]) + 1)
+    M_to = :(noise_dimension($M[$idx_M_to]))
+    rhs = :(Security{dimension($dname),noise_dimension($dname),false}($du, $u, t, $D_from:$D_to, $M_from:$M_to))
     return AssignmentExpr(lhs, rhs)
 end
 
@@ -223,11 +315,33 @@ function drift_assignment(system::SystemDynamics, case::Union{Val{:IIP},Val{:OOP
     return μ isa Dict ? AssignmentExpr(gensym(), μ[case]) : AssignmentExpr(gensym(), μ)
 end
 
-function generate_output(drifts::Vector{AssignmentExpr})
-    t = Expr(:tuple)
-    push!(t.args, Expr.(:call, :SVector, lefthandside.(drifts))...)
-    return Expr(:call, :vcat, t)
+# function generate_diffusions(dynamics::Dynamics, case::Union{Val{:IIP},Val{:OOP}}, noise::Union{Val{:DN},Val{:NDN}})
+function generate_diffusions(dynamics::Dynamics, case::Union{Val{:IIP},Val{:OOP}})
+    models = values(dynamics.models)
+    systems = values(dynamics.systems)
+    # ds = vcat(diffusion_assignment.(models, case, noise)..., diffusion_assignment.(systems, case, noise)...)
+    ds = vcat(diffusion_assignment.(models, case)..., diffusion_assignment.(systems, case)...)
+    return ds
 end
+
+function diffusion_assignment(model::ShortRateModelDynamics, case::Union{Val{:IIP},Val{:OOP}})
+    return diffusion_assignment(model.x, case)
+end
+
+function diffusion_assignment(system::SystemDynamics, case::Union{Val{:IIP},Val{:OOP}})
+    @unpack σ = system
+    return σ isa Dict ? AssignmentExpr(gensym(), σ[case]) : AssignmentExpr(gensym(), σ)
+end
+
+# OOP + DN
+function generate_output(drifts::Vector{AssignmentExpr})
+    return Expr(:call, :vcat, Expr.(:call, :SVector, lefthandside.(drifts))...) # no need to call SVector() in StaticArrays.jl v1.0
+end
+
+# OOP + NDD: Aun no sabemos como concatenar varias SMatrix y formar una SMatrix Block Diagonal
+# function generate_output(drifts::Vector{AssignmentExpr})
+#     return Expr(:call, :vcat, Expr.(:call, :SVector, lefthandside.(drifts))...)
+# end
 
 function parse_macro_model!(parser, model)
 

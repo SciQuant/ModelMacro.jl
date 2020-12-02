@@ -56,39 +56,62 @@ prettify(@expand @model DS begin
         β → β
     end
 
-
+    # OOP example
     @system x begin
-        x₀ → 1.
+        x₀ → [1., 3.]
         m → NonDiagonalNoise(2)
 
-        # IIP
-        # μ → begin
-        #     x.dx[1] = expr_que_evalua_a_escalar
-        #     x.dx[2] = expr_que_evalua_a_escalar
-        #     # or
-        #     f(x.dx, argumentos_que_queramos...) # f es una funcion que hace inplace operations sobre x.dx
-        #     # or
-        #     mul!(x.dx, argumentos_que_queramos...) # directamente una operation inplace que ya exista
-        #     # Hint:
-        #     # no importa que retornamos al final porque modificamos inplace
-        # end
-
-        # OOP
         μ → begin
-            dx1 = expr_que_evalua_a_escalar
-            dx2 = expr_que_evalua_a_escalar_o_vector
+            dx1 = expr
+            dx2 = expr
             SVector{2}(dx1, dx2) # esto se retorna # otro hint: SVector{dimension(x)}(...)  y para σ SMatrix{dimension(x),noise_dimension(x)}([...])
             # o tambien podemos retornar
-            vcat(SVector(dx1), dx2) # si es que dx2 es un vector
+            vcat(SVector(dx1), SVector(dx2)) # si es que dx2 es un vector
             # or, directamente
-            dx = expr_que_evalua_a_vector # aca una expr que evalue un SArray, asi que retornamos, incluso el dx no es necesario
+            dx = expr_que_evalua_a_SVector # aca una expr que evalue un SArray, asi que retornamos, incluso el dx no es necesario
+        end
+
+        σ → begin
+            # aca tiene que retornar una matrix 2x2, porque es non diagonal
+            dx11 = expr
+            dx12 = expr
+            dx21 = expr
+            dx22 = expr
+            SMatrix{2,2}(dx1, dx2, dx3, dx4) # or @SMatrix([dx11 dx12; dx21 dx22]) or SMatrix{dimension(x),noise_dimension(x)}(dx1, dx2, dx3, dx4)
+            # or directly an expression that evaluates to a SMatrix
+            expr
         end
     end
 
+    # IIP example
     @system y begin
         x₀ → [1., 2.]
         m → NonDiagonalNoise(4)
         ρ → ρy
+
+        μ → begin
+            y.dx[1] = expr
+            y.dx[2] = expr
+            # or
+            f(y.dx, argumentos_que_queramos...) # f es una funcion que hace inplace operations sobre x.dx
+            # or
+            mul!(y.dx, argumentos_que_queramos...) # directamente operations inplace que ya existan
+            # Hint:
+            # no importa que retornamos al final porque modificamos inplace
+        end
+
+        σ → begin
+            # tenemos que modificar inplace una matrix de 2x4, las posiciones que se quieran
+            y.dx[1,1] = expr
+            y.dx[1,2] = expr
+            y.dx[1,3] = expr
+            y.dx[1,4] = expr
+            y.dx[2,1] = expr
+            y.dx[2,2] = expr
+            y.dx[2,3] = expr
+            y.dx[2,4] = expr
+            # or, todo lo mismo que arriba en μ
+        end
     end
 
     @system z begin

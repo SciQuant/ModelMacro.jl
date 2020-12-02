@@ -18,9 +18,8 @@ isinplace(::Function{IIP}) where {IIP} = IIP
 
 function Base.convert(::Type{Expr}, f::Function{true})
     @unpack name, args, header, body = f
-    f = Expr(:call, name, args)
     ex = :(
-        $f = begin
+        function $(name)($(args.args...))
             @inbounds begin
                 $header
                 $body
@@ -33,9 +32,8 @@ end
 
 function Base.convert(::Type{Expr}, f::Function{false})
     @unpack name, args, header, body, output = f
-    f = Expr(:call, name, args)
     ex = :(
-        $f = begin
+        function $(name)($(args.args...))
             @inbounds begin
                 $header
                 $body
