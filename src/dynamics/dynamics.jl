@@ -10,54 +10,14 @@ end
 
 function Dynamics()
     reset_system_counter()
-    return Dynamics(
-        OrderedDict{Symbol,SystemDynamics}(),
-        OrderedDict{Symbol,ModelDynamics}()
-    )
+    return Dynamics(OrderedDict{Symbol,SystemDynamics}(), OrderedDict{Symbol,ModelDynamics}())
 end
-
-
-function generate_functions(d::Dynamics) end # generates dynamics functions
-
 
 function generate_dynamics(dynamics::Dynamics)
     models = values(dynamics.models)
     systems = values(dynamics.systems)
     ds = vcat(dynamics_assignment.(models)..., dynamics_assignment.(systems)...)
     return ds
-end
-
-function dynamics_assignment(model::ShortRateModelDynamics{:OneFactorAffine})
-    @unpack dynamics, params, x, B = model
-    @unpack κ, θ, Σ, α, β, ξ₀, ξ₁ = params
-    kwargs = Expr(:tuple)
-    isnothing(ξ₀) ? nothing : push!(kwargs.args, :(ξ₀ = $ξ₀))
-    isnothing(ξ₁) ? nothing : push!(kwargs.args, :(ξ₁ = $ξ₁))
-    lhs = dynamics
-    rhs = :(OneFactorAffineModelDynamics($(x.x0), $κ, $θ, $Σ, $α, $β; $kwargs...))
-    ax = AssignmentExpr(lhs, rhs)
-    aB = dynamics_assignment(B)
-    return [ax, aB]
-end
-
-function dynamics_assignment(model::ShortRateModelDynamics{:MultiFactorAffine})
-    @unpack dynamics, params, x, B = model
-    @unpack κ, θ, Σ, α, β, ξ₀, ξ₁ = params
-    lhs = dynamics
-    rhs = :(MultiFactorAffineModelDynamics($(x.x0), $κ, $θ, $Σ, $α, $β, $ξ₀, $ξ₁))
-    ax = AssignmentExpr(lhs, rhs)
-    aB = dynamics_assignment(B)
-    return [ax, aB]
-end
-
-function dynamics_assignment(system::SystemDynamics)
-    @unpack dname, x0, m, ρ = system
-    kwargs = Expr(:tuple)
-    isnothing(m) ? nothing : push!(kwargs.args, :(m = $m))
-    isnothing(ρ) ? nothing : push!(kwargs.args, :(ρ = $ρ))
-    lhs = dname
-    rhs = :(SystemDynamics($x0; $kwargs...))
-    return AssignmentExpr(lhs, rhs)
 end
 
 function generate_dimensions(dynamics::Vector{AssignmentExpr})
@@ -81,3 +41,50 @@ function generate_noise_dimensions(dynamics::Vector{AssignmentExpr})
     rhs = Expr(:call, :cumsum, t)
     return AssignmentExpr(lhs, rhs)
 end
+
+# f IIP - g IIP + DN
+function generate_securities(dynamics::Dynamics, du, u, D)
+    models = values(dynamics.models)
+    systems = values(dynamics.systems)
+    ss = vcat(security_assignment.(models, du, u, D)..., security_assignment.(systems, du, u, D)...)
+    return ss
+end
+
+# f OOP - g OOP + DN - g OOP + NonDN
+function generate_securities(dynamics::Dynamics, u, D)
+    models = values(dynamics.models)
+    systems = values(dynamics.systems)
+    ss = vcat(security_assignment.(models, u, D)..., security_assignment.(systems, u, D)...)
+    return ss
+end
+
+# g IIP + NonDN
+function generate_securities(dynamics::Dynamics, du, u, D, M)
+    models = values(dynamics.models)
+    systems = values(dynamics.systems)
+    ss = vcat(security_assignment.(models, du, u, D, M)..., security_assignment.(systems, du, u, D, M)...)
+    return ss
+end
+
+function generate_drifts(dynamics::Dynamics, case::Union{Val{:IIP},Val{:OOP}})
+    models = values(dynamics.models)
+    systems = values(dynamics.systems)
+    ds = vcat(drift_assignment.(models, case)..., drift_assignment.(systems, case)...)
+    return ds
+end
+
+function generate_diffusions(dynamics::Dynamics, case::Union{Val{:IIP},Val{:OOP}})
+    models = values(dynamics.models)
+    systems = values(dynamics.systems)
+    ds = vcat(diffusion_assignment.(models, case)..., diffusion_assignment.(systems, case)...)
+    return ds
+end
+
+# f OOP - g OOP + DN
+generate_output(a::Vector{AssignmentExpr}) = Expr(:call, :vcat, lefthandside.(a)...)
+generate_output(a::Vector{AssignmentExpr}, ::Val{:DN}) = generate_output(a)
+
+# g OOP + NonDN
+# Aun no sabemos como concatenar varias SMatrix y formar una SMatrix Block Diagonal. See
+# issue #856 in StaticArrays.jl
+generate_output(a::Vector{AssignmentExpr}, ::Val{:NonDN}) = generate_output(a, Val(:DN)) # fix

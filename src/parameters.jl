@@ -7,15 +7,6 @@ end
 
 Parameters() = Parameters(Symbol[], Symbol[], AssignmentExpr[])
 
-generate_withkw_macro(p::Parameters) = generate_withkw_macro(p.assignments)
-
-function generate_withkw_macro(a::Vector{AssignmentExpr})
-    t = Expr(:tuple)
-    push!(t.args, convert.(Expr, a)...)
-    macro_expr = Expr(:macrocall, Symbol("@with_kw"), :nothing, t)
-    return macro_expr
-end
-
 function parse_params!(parser, block)
 
     parameters = parser.parameters
@@ -53,4 +44,20 @@ function parse_params!(parser, block)
     end
 
     return UMC_PARSER_OK
+end
+
+generate_withkw_macro(p::Parameters) = generate_withkw_macro(p.assignments)
+
+function generate_withkw_macro(a::Vector{AssignmentExpr})
+    t = Expr(:tuple)
+    push!(t.args, convert.(Expr, a)...)
+    macro_expr = Expr(:macrocall, Symbol("@with_kw"), :nothing, t)
+    return macro_expr
+end
+
+function generate_unpack_macro(paramsnames, p)
+    params = Expr(:tuple)
+    push!(params.args, paramsnames...)
+    macro_expr = Expr(:macrocall, Symbol("@unpack"), :nothing, Expr(:(=), params, p))
+    return macro_expr
 end

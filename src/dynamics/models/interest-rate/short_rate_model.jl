@@ -96,3 +96,97 @@ function parse_srm!(parser, block)
 
     return UMC_PARSER_OK
 end
+
+function dynamics_assignment(model::ShortRateModelDynamics{:OneFactorAffine})
+    @unpack dynamics, params, x, B = model
+    @unpack κ, θ, Σ, α, β, ξ₀, ξ₁ = params
+    kwargs = Expr(:tuple)
+    isnothing(ξ₀) ? nothing : push!(kwargs.args, :(ξ₀ = $ξ₀))
+    isnothing(ξ₁) ? nothing : push!(kwargs.args, :(ξ₁ = $ξ₁))
+    lhs = dynamics
+    rhs = :(OneFactorAffineModelDynamics($(x.x0), $κ, $θ, $Σ, $α, $β; $kwargs...))
+    ax = AssignmentExpr(lhs, rhs)
+    aB = dynamics_assignment(B)
+    return [ax, aB]
+end
+
+function dynamics_assignment(model::ShortRateModelDynamics{:MultiFactorAffine})
+    @unpack dynamics, params, x, B = model
+    @unpack κ, θ, Σ, α, β, ξ₀, ξ₁ = params
+    lhs = dynamics
+    rhs = :(MultiFactorAffineModelDynamics($(x.x0), $κ, $θ, $Σ, $α, $β, $ξ₀, $ξ₁))
+    ax = AssignmentExpr(lhs, rhs)
+    aB = dynamics_assignment(B)
+    return [ax, aB]
+end
+
+function dynamics_assignment(model::ShortRateModelDynamics{:OneFactorQuadratic})
+    @unpack dynamics, params, x, B = model
+    @unpack κ, θ, σ, ξ₀, ξ₁, ξ₂ = params
+    lhs = dynamics
+    rhs = :(MultiFactorAffineModelDynamics($(x.x0), $κ, $θ, $σ, $ξ₀, $ξ₁, $ξ₂))
+    ax = AssignmentExpr(lhs, rhs)
+    aB = dynamics_assignment(B)
+    return [ax, aB]
+end
+
+# SPOT: see :OneFactorQuadratic above, it is the same method
+function dynamics_assignment(model::ShortRateModelDynamics{:MultiFactorQuadratic})
+    @unpack dynamics, params, x, B = model
+    @unpack κ, θ, σ, ξ₀, ξ₁, ξ₂ = params
+    lhs = dynamics
+    rhs = :(MultiFactorAffineModelDynamics($(x.x0), $κ, $θ, $σ, $ξ₀, $ξ₁, $ξ₂))
+    ax = AssignmentExpr(lhs, rhs)
+    aB = dynamics_assignment(B)
+    return [ax, aB]
+end
+
+# f IIP - g IIP + DN
+function security_assignment(model::ShortRateModelDynamics, du, u, D)
+    @unpack securities, dynamics, x, B = model
+    ax = security_assignment(x, du, u, D)
+    aB = security_assignment(B, du, u, D)
+
+    lhs = securities
+    rhs = :(FixedIncomeSecurities($dynamics, $(ax.lhs), $(aB.lhs)))
+    aFI = AssignmentExpr(lhs, rhs)
+
+    return [ax, aB, aFI]
+end
+
+# f OOP - g OOP + DN - g OOP + NonDN
+function security_assignment(model::ShortRateModelDynamics, u, D)
+    @unpack securities, dynamics, x, B = model
+    ax = security_assignment(x, u, D)
+    aB = security_assignment(B, u, D)
+
+    lhs = securities
+    rhs = :(FixedIncomeSecurities($dynamics, $(ax.lhs), $(aB.lhs)))
+    aFI = AssignmentExpr(lhs, rhs)
+
+    return [ax, aB, aFI]
+end
+
+# g IIP + NonDN
+function security_assignment(model::ShortRateModelDynamics, du, u, D, M)
+    @unpack securities, dynamics, x, B = model
+    ax = security_assignment(x, du, u, D, M)
+    aB = security_assignment(B, du, u, D, M)
+
+    lhs = securities
+    rhs = :(FixedIncomeSecurities($dynamics, $(ax.lhs), $(aB.lhs)))
+    aFI = AssignmentExpr(lhs, rhs)
+
+    return [ax, aB, aFI]
+end
+
+function drift_assignment(model::ShortRateModelDynamics, case::Union{Val{:IIP},Val{:OOP}})
+    @unpack x, B = model
+    ax = drift_assignment(x, case)
+    aB = drift_assignment(B, case)
+    return [ax, aB]
+end
+
+function diffusion_assignment(model::ShortRateModelDynamics, case::Union{Val{:IIP},Val{:OOP}})
+    return diffusion_assignment(model.x, case)
+end
