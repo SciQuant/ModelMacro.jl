@@ -59,38 +59,10 @@ macro model(name, body)
     # init an empty parser
     parser = Model()
 
-    # pre-parser initializations
-    init_before_parser!(parser)
-
     # parse
     parse_macro_model!(parser, body)
 
-    # post-parser initializations
-    init_after_parser!(parser)
-
-    ex = quote
-
-        $(esc(withkw_assignment))
-
-        # la realidad es que las funciones argumento van a un constructor de DynamicalSystem
-        # y ahi dentro, una vez calculado IIP y DN, se instancia a DynamicalSystemDrift y a
-        # DynamicalSystemDiffusion.
-        f = DynamicalSystemDrift{IIP}($f_iip, $f_oop)
-        g = DynamicalSystemDiffusion{IIP,DN}($g_iip_dn, $g_oop_dn, $g_iip_ndn, $g_oop_ndn)
-
-    #     # en realidad me va a dar en el nombre del model un dynamicalsystem
-    #     $(esc(name)) = begin
-    #         $(convert(Expr, getfunction(parser, :μiip)))
-    #         $(convert(Expr, getfunction(parser, :μoop)))
-    #         $(convert(Expr, getfunction(parser, :σiip)))
-    #         $(convert(Expr, getfunction(parser, :σoop)))
-    #         p = $(esc(parser.parameters.external[].call_expr))
-    #         ds = DynamicalSystem($(esc(getfuncname(parser, :μiip))), $(esc(getfuncname(parser, :σiip))), p)
-    #         ds
-    #         # luego mas adelante tendria que construir el model, que incluye las funciones
-    #         # de fairvalues y expectations
-    #     end
-    end
+    ex = generate_dynamicalsystem(parser)
 
     return ex
 end
@@ -166,4 +138,58 @@ function parse_macro_model!(parser, model)
     # check_macro_model(parser)
 
     return UMC_PARSER_OK
+end
+
+function generate_dynamical_system(parser)
+    @unpack dynamics, parameters = parser
+
+    # these are the additional parameters that are needed
+    ad, aD, aM = generate_dynamics_parameters(dynamics)
+
+    # concatenate all parameters
+    params = vcat(parameters.assignments, ad, aD, aM)
+
+    # @with_kw macro
+    withkw = generate_withkw_macro(params)
+    withkw_assignment = AssignmentExpr(parameters.name[], withkw)
+    params_macro = convert(Expr, withkw_assignment)
+
+    # define and use the same names for all the functions
+    args = (du = gensym(:du), u = gensym(:u), p = gensym(:p), t = :t)
+    paramsnames = lefthandside.(params)
+    D = lefthandside(aD)
+    M = lefthandside(aM)
+
+    f_iip = generate_inplace_drift(dynamics, args, paramsnames, D)
+    f_oop = generate_outofplace_drift(dynamics, args, paramsnames, D)
+    g_iip_dn = generate_inplace_diagonalnoise_diffusion(dynamics, args, paramsnames, D)
+    g_oop_dn = generate_outofplace_diagonalnoise_diffusion(dynamics, args, paramsnames, D)
+    g_iip_ndn = generate_inplace_nondiagonalnoise_diffusion(dynamics, args, paramsnames, D, M)
+    g_oop_ndn = generate_outofplace_nondiagonalnoise_diffusion(dynamics, args, paramsnames, D)
+
+    ex = quote
+
+        $(esc(params_macro))
+
+        # la realidad es que las funciones argumento van a un constructor de DynamicalSystem
+        # y ahi dentro, una vez calculado IIP y DN, se instancia a DynamicalSystemDrift y a
+        # DynamicalSystemDiffusion.
+        f = DynamicalSystemDrift{IIP}($f_iip, $f_oop)
+        g = DynamicalSystemDiffusion{IIP,DN}($g_iip_dn, $g_oop_dn, $g_iip_ndn, $g_oop_ndn)
+
+    #     # en realidad me va a dar en el nombre del model un dynamicalsystem
+    #     $(esc(name)) = begin
+    #         $(convert(Expr, getfunction(parser, :μiip)))
+    #         $(convert(Expr, getfunction(parser, :μoop)))
+    #         $(convert(Expr, getfunction(parser, :σiip)))
+    #         $(convert(Expr, getfunction(parser, :σoop)))
+    #         p = $(esc(parser.parameters.external[].call_expr))
+    #         ds = DynamicalSystem($(esc(getfuncname(parser, :μiip))), $(esc(getfuncname(parser, :σiip))), p)
+    #         ds
+    #         # luego mas adelante tendria que construir el model, que incluye las funciones
+    #         # de fairvalues y expectations
+    #     end
+    end
+
+    return ex
 end

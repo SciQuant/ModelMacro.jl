@@ -124,18 +124,17 @@ function dynamics_assignment(model::ShortRateModelDynamics{:OneFactorQuadratic})
     @unpack dynamics, params, x, B = model
     @unpack κ, θ, σ, ξ₀, ξ₁, ξ₂ = params
     lhs = dynamics
-    rhs = :(MultiFactorAffineModelDynamics($(x.x0), $κ, $θ, $σ, $ξ₀, $ξ₁, $ξ₂))
+    rhs = :(OneFactorQuadraticModelDynamics($(x.x0), $κ, $θ, $σ, $ξ₀, $ξ₁, $ξ₂))
     ax = AssignmentExpr(lhs, rhs)
     aB = dynamics_assignment(B)
     return [ax, aB]
 end
 
-# SPOT: see :OneFactorQuadratic above, it is the same method
 function dynamics_assignment(model::ShortRateModelDynamics{:MultiFactorQuadratic})
     @unpack dynamics, params, x, B = model
     @unpack κ, θ, σ, ξ₀, ξ₁, ξ₂ = params
     lhs = dynamics
-    rhs = :(MultiFactorAffineModelDynamics($(x.x0), $κ, $θ, $σ, $ξ₀, $ξ₁, $ξ₂))
+    rhs = :(MultiFactorQuadraticModelDynamics($(x.x0), $κ, $θ, $σ, $ξ₀, $ξ₁, $ξ₂))
     ax = AssignmentExpr(lhs, rhs)
     aB = dynamics_assignment(B)
     return [ax, aB]

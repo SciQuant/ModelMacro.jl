@@ -13,6 +13,13 @@ function Dynamics()
     return Dynamics(OrderedDict{Symbol,SystemDynamics}(), OrderedDict{Symbol,ModelDynamics}())
 end
 
+function generate_dynamics_parameters(dynamics::Dynamics)
+    dynamics_assignments = generate_dynamics(dynamics)
+    D_assignment = generate_dimensions(dynamics_assignments)
+    M_assignment = generate_noise_dimensions(dynamics_assignments)
+    return dynamics_assignments, D_assignment, M_assignment
+end
+
 function generate_dynamics(dynamics::Dynamics)
     models = values(dynamics.models)
     systems = values(dynamics.systems)
@@ -88,3 +95,92 @@ generate_output(a::Vector{AssignmentExpr}, ::Val{:DN}) = generate_output(a)
 # Aun no sabemos como concatenar varias SMatrix y formar una SMatrix Block Diagonal. See
 # issue #856 in StaticArrays.jl
 generate_output(a::Vector{AssignmentExpr}, ::Val{:NonDN}) = generate_output(a, Val(:DN)) # fix
+
+# f IIP
+function generate_inplace_drift(dynamics::Dynamics, args, paramsnames, D)
+    @unpack du, u, p, t = args
+    f = Function{true}(gensym(:f), args=Expr(:tuple, du, u, p, t))
+    unpack = generate_unpack_macro(paramsnames, p)
+    securities = generate_securities(dynamics, du, u, D)
+    drifts = generate_drifts(dynamics, Val(:IIP))
+    push!(f.header.args, unpack)
+    push!(f.header.args, convert.(Expr, securities)...)
+    push!(f.body.args, convert.(Expr, drifts)...)
+    return convert(Expr, f)
+end
+
+# f OOP
+function generate_outofplace_drift(dynamics::Dynamics, args, paramsnames, D)
+    @unpack u, p, t = args
+    f = Function{false}(gensym(:f), args=Expr(:tuple, u, p, t))
+    unpack = generate_unpack_macro(paramsnames, p)
+    securities = generate_securities(dynamics, u, D)
+    drifts = generate_drifts(dynamics, Val(:OOP))
+    output = generate_output(drifts)
+    push!(f.header.args, unpack)
+    push!(f.header.args, convert.(Expr, securities)...)
+    push!(f.body.args, convert.(Expr, drifts)...)
+    push!(f.output.args, output)
+    return convert(Expr, f)
+end
+
+# g IIP + DN
+function generate_inplace_diagonalnoise_diffusion(dynamics::Dynamics, args, paramsnames, D)
+    @unpack du, u, p, t = args
+    g = Function{true}(gensym(:g), args=Expr(:tuple, du, u, p, t))
+    unpack = generate_unpack_macro(paramsnames, p)
+    securities = generate_securities(dynamics, du, u, D)
+    diffusions = generate_diffusions(dynamics, Val(:IIP)) # Val(:DN)
+    push!(g.header.args, unpack)
+    push!(g.header.args, convert.(Expr, securities)...)
+    push!(g.body.args, convert.(Expr, diffusions)...)
+    return convert(Expr, g)
+end
+
+# g OOP + DN
+function generate_outofplace_diagonalnoise_diffusion(dynamics::Dynamics, args, paramsnames, D)
+    @unpack u, p, t = args
+    g = Function{false}(gensym(:g), args=Expr(:tuple, u, p, t))
+    unpack = generate_unpack_macro(paramsnames, p)
+    securities = generate_securities(dynamics, u, D)
+    diffusions = generate_diffusions(dynamics, Val(:OOP)) # Val(:DN)
+    output = generate_output(diffusions, Val(:DN))
+    push!(g.header.args, unpack)
+    push!(g.header.args, convert.(Expr, securities)...)
+    push!(g.body.args, convert.(Expr, diffusions)...)
+    push!(g.output.args, output)
+    return convert(Expr, g)
+end
+
+# g IIP + NonDN
+function generate_inplace_nondiagonalnoise_diffusion(dynamics::Dynamics, args, paramsnames, D, M)
+    @unpack du, u, p, t = args
+    g = Function{true}(gensym(:g), args=Expr(:tuple, du, u, p, t))
+    unpack = generate_unpack_macro(paramsnames, p)
+    securities = generate_securities(dynamics, du, u, D, M)
+    diffusions = generate_diffusions(dynamics, Val(:IIP)) # Val(:NonDN)
+    push!(g.header.args, unpack)
+    push!(g.header.args, convert.(Expr, securities)...)
+    push!(g.body.args, convert.(Expr, diffusions)...)
+    return convert(Expr, g)
+end
+
+# g OOP + NonDN
+# en esta funcion tenemos problemas ya que aun no podemos construir una block matrix usando
+# static arrays de forma simple. Un mecanismo seria completar la matrix usando matrices con
+# zeros e implementando hcat y vcat (no es lo mejor por performance ya que tendriamos varias
+# posiciones con zeros, pero bueno). Por otro lado esta lo de usar SDiagonal, pero eso tiene
+# otras dificultades asociadas.
+function generate_outofplace_nondiagonalnoise_diffusion(dynamics::Dynamics, args, paramsnames, D)
+    @unpack u, p, t = args
+    g = Function{false}(gensym(:g), args=Expr(:tuple, u, p, t))
+    unpack = generate_unpack_macro(paramsnames, p)
+    securities = generate_securities(dynamics, u, D) # no necesita M yet
+    diffusions = generate_diffusions(dynamics, Val(:OOP)) # Val(:NonDN)
+    output = generate_output(diffusions, Val(:NonDN))
+    push!(g.header.args, unpack)
+    push!(g.header.args, convert.(Expr, securities)...)
+    push!(g.body.args, convert.(Expr, diffusions)...)
+    push!(g.output.args, output)
+    return convert(Expr, g)
+end
